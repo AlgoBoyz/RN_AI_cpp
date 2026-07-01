@@ -1736,6 +1736,31 @@ void mouseThreadFunction(MouseThread& mouseThread)
                 });
         };
 
+    // ── Inference log setup (%USERPROFILE%/RNAI/) ──
+    static std::ofstream g_inf_log;
+    static std::once_flag g_inf_log_flag;
+    std::call_once(g_inf_log_flag, []() {
+        char profile[MAX_PATH];
+        DWORD len = GetEnvironmentVariableA("USERPROFILE", profile, sizeof(profile));
+        if (len > 0 && len < MAX_PATH) {
+            namespace fs = std::filesystem;
+            std::string dir = std::string(profile) + "\\RNAI";
+            std::error_code ec;
+            fs::create_directories(dir, ec);
+            auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            std::tm tm;
+            localtime_s(&tm, &t);
+            char name[MAX_PATH];
+            snprintf(name, sizeof(name), "%s\\inference_%04d%02d%02d_%02d%02d%02d.log",
+                     dir.c_str(), tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                     tm.tm_hour, tm.tm_min, tm.tm_sec);
+            g_inf_log.open(name, std::ios::out | std::ios::binary);
+            if (g_inf_log.is_open())
+                g_inf_log << "ts\tfps\tinf_ms\tdet\tcand\tclk_aim\ttgt_cls" << std::endl;
+        }
+    });
+    static auto g_inf_last_log = std::chrono::steady_clock::now();
+
     while (!shouldExit)
     {
         std::vector<cv::Rect> boxes;
@@ -2162,6 +2187,40 @@ void mouseThreadFunction(MouseThread& mouseThread)
 
         handleEasyNoRecoil(mouseThread);
         mouseThread.checkAndResetPredictions();
+
+        // ── Log inference stats (1/sec) ──
+        if (g_inf_log.is_open()) {
+            auto now = std::chrono::steady_clock::now();
+            if (now - g_inf_last_log >= std::chrono::seconds(1)) {
+                g_inf_last_log = now;
+                auto sys = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                std::tm tm;
+                localtime_s(&tm, &sys);
+                char ts[64];
+                snprintf(ts, sizeof(ts), "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+                char lat_buf[16];
+                float lat = GetOverlayInferenceLatencyMs();
+                snprintf(lat_buf, sizeof(lat_buf), "%.1f", lat);
+
+                g_inf_log << ts << '\t'
+                          << captureFps.load() << '\t'
+                          << lat_buf << '\t'
+                          << boxes.size() << '\t'
+                          << candidates.size() << '\t'
+                          << (aiming.load() ? 'Y' : 'N') << '\t';
+                if (target) {
+                    auto it = config.custom_class_names.find(target->classId);
+                    if (it != config.custom_class_names.end())
+                        g_inf_log << it->second;
+                    else
+                        g_inf_log << 'c' << target->classId;
+                } else {
+                    g_inf_log << '-';
+                }
+                g_inf_log << std::endl;
+            }
+        }
 
         delete target;
     }

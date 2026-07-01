@@ -22,13 +22,11 @@
 #include <chrono>
 #include <iostream>
 
-#pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "windowscodecs.lib")
-#pragma comment(lib, "dcomp.lib")
 
 #include "Game_overlay.h"
 
@@ -461,17 +459,10 @@ bool Game_overlay::Impl::CreateWindowAndDevices()
     if (!RegisterClassExW(&wc))
         return false;
 
-    DWORD ex = WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED;
+    DWORD ex = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED;
     hwnd = CreateWindowExW(ex, wc.lpszClassName, window_title_.c_str(), WS_POPUP,
         winX, winY, winW, winH, nullptr, nullptr, hinst, this);
     if (!hwnd) return false;
-
-    BOOL dwm = FALSE;
-    if (SUCCEEDED(DwmIsCompositionEnabled(&dwm)) && dwm)
-    {
-        MARGINS m = { -1, -1, -1, -1 };
-        DwmExtendFrameIntoClientArea(hwnd, &m);
-    }
 
     ShowWindow(hwnd, SW_SHOWNA);
     ApplyDisplayAffinity();
@@ -525,11 +516,13 @@ bool Game_overlay::Impl::CreateWindowAndDevices()
         return false;
     }
 
-    if (FAILED(DCompositionCreateDevice(
-        dxgiDev.Get(), IID_PPV_ARGS(&dcompDevice))))
-    {
+    HMODULE dcompMod = LoadLibraryW(L"dcomp.dll");
+    if (!dcompMod) return false;
+    auto pDCompCreate = reinterpret_cast<HRESULT(WINAPI*)(IDXGIDevice*, REFIID, void**)>(
+        GetProcAddress(dcompMod, "DCompositionCreateDevice"));
+    if (!pDCompCreate) return false;
+    if (FAILED(pDCompCreate(dxgiDev.Get(), IID_PPV_ARGS(&dcompDevice))))
         return false;
-    }
     if (FAILED(dcompDevice->CreateTargetForHwnd(hwnd, TRUE, &dcompTarget))) return false;
     if (FAILED(dcompDevice->CreateVisual(&dcompRoot))) return false;
     if (FAILED(dcompRoot->SetContent(swapChain.Get()))) return false;
@@ -684,12 +677,8 @@ void Game_overlay::Impl::ApplyDisplayAffinity()
 
     const bool wantedExclude = excludeFromCapture.load();
     appliedExcludeFromCapture = wantedExclude;
-    const DWORD affinity = wantedExclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE;
-    if (SetWindowDisplayAffinity(hwnd, affinity))
-        return;
-
-    if (wantedExclude)
-        SetWindowDisplayAffinity(hwnd, WDA_MONITOR);
+    const DWORD affinity = wantedExclude ? WDA_MONITOR : WDA_NONE;
+    SetWindowDisplayAffinity(hwnd, affinity);
 }
 
 void Game_overlay::Impl::RenderLoop()
