@@ -1,0 +1,7 @@
+/nologo
+/EHsc
+/Imodules/serial/include
+test_g302_move.cpp
+/link
+/LIBPATH:modules/serial/visual_studio/x64/Release
+serial.lib

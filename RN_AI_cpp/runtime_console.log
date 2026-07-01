@@ -1,0 +1,19 @@
+[Mouse] Using default Win32 method input.
+[DirectML] Using adapter: NVIDIA GeForce RTX 5060
+[MAIN] DML detector initialized.
+
+
+Aimbot is started!
+RightMouseButton -> Targeting
+F2 -> Exit
+F3 -> Pause Aiming
+F4 -> Reload Config
+Home -> Overlay (OPTIONS)
+[Capture] OpenCV version: 4.10.0
+[Capture] Using Duplication API
+[DML] Detector reloaded: apex.onnx
+[Capture] Re-init with Duplication API.
+[DDA] The adapter has no outputs
+[DDA] DDAManager Initialize failed hr=0x887a0002
+[Capture] Re-init with Duplication API.
+[Capture] Re-init with Duplication API.
