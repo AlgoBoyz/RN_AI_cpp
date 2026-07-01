@@ -8,6 +8,7 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <dxgi.h>
 
 #include "dml_detector.h"
@@ -188,6 +189,42 @@ int DirectMLDetector::getNumberOfClasses()
 
 void DirectMLDetector::processFrame(const cv::Mat& frame)
 {
+    // ── Debug: log frame info every 3s ──
+    {
+        static auto lastDbg = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (now - lastDbg >= std::chrono::seconds(3))
+        {
+            lastDbg = now;
+            std::cout << "[DML::processFrame] called. frame: "
+                      << frame.cols << "x" << frame.rows
+                      << " type=" << frame.type()
+                      << " empty=" << (frame.empty() ? "YES" : "no")
+                      << std::endl;
+            if (!frame.empty())
+            {
+                // save to RNAI/debug/
+                char profile[MAX_PATH];
+                DWORD len = GetEnvironmentVariableA("USERPROFILE", profile, sizeof(profile));
+                if (len > 0 && len < MAX_PATH)
+                {
+                    std::string dir = std::string(profile) + "\\RNAI\\debug";
+                    std::error_code ec;
+                    std::filesystem::create_directories(dir, ec);
+                    auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                    std::tm tm;
+                    localtime_s(&tm, &t);
+                    char name[MAX_PATH];
+                    snprintf(name, sizeof(name), "%s\\frame_%02d%02d%02d.png",
+                             dir.c_str(), tm.tm_hour, tm.tm_min, tm.tm_sec);
+                    bool ok = cv::imwrite(name, frame);
+                    std::cout << "[DML::processFrame] imwrite " << (ok ? "OK" : "FAILED")
+                              << " → " << name << std::endl;
+                }
+            }
+        }
+    }
+
     std::unique_lock<std::mutex> lock(inferenceMutex);
     currentFrame = frame.clone();
     frameReady = true;

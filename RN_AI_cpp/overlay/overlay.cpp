@@ -271,7 +271,7 @@ bool CreateOverlayWindow()
 #define WDA_EXCLUDEFROMCAPTURE 0x00000011
 #endif
     // Prevent recursive self-capture in debug view.
-    SetWindowDisplayAffinity(g_hwnd, WDA_MONITOR);
+    SetWindowDisplayAffinity(g_hwnd, WDA_EXCLUDEFROMCAPTURE);
     
     if (config.overlay_opacity <= 20)
     {

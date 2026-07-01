@@ -95,20 +95,10 @@ bool isAnyKeyPressed(const std::vector<std::string>& keys)
             else if(key_name == "X2MouseButton")     pressed = arduinoSerial->aiming_active;
         }
 
-        // local win32 keyboard/mouse
+        // local win32 keyboard/mouse fallback (hardware device may not report button state)
         if (!pressed && key_code != -1)
         {
-            const bool is_mouse_key =
-                (key_name == "LeftMouseButton") ||
-                (key_name == "RightMouseButton") ||
-                (key_name == "MiddleMouseButton") ||
-                (key_name == "X1MouseButton") ||
-                (key_name == "X2MouseButton");
-
-            if (!is_mouse_key || !usePhysicalDevice)
-            {
-                pressed = (GetAsyncKeyState(key_code) & 0x8000) != 0;
-            }
+            pressed = (GetAsyncKeyState(key_code) & 0x8000) != 0;
         }
 
         if (pressed) return true;
@@ -123,16 +113,55 @@ void keyboardListener()
         if (!config.auto_aim)
         {
             // Respect only configured targeting keys (from UI/config).
-            aiming = isAnyKeyPressed(config.button_targeting);
+            bool new_aiming = isAnyKeyPressed(config.button_targeting);
+            {
+                static bool last_aiming = false;
+                if (new_aiming != last_aiming) {
+                    last_aiming = new_aiming;
+                    std::cout << "[Input] button_targeting → "
+                              << (new_aiming ? "PRESSED (aiming ON)" : "RELEASED (aiming OFF)")
+                              << std::endl;
+                }
+            }
+            aiming = new_aiming;
         }
         else
         {
             aiming = true;
+            {
+                static bool logged_auto = false;
+                if (!logged_auto) {
+                    logged_auto = true;
+                    std::cout << "[Input] auto_aim = true → aiming always ON" << std::endl;
+                }
+            }
         }
 
         // Respect only configured key lists for shoot/zoom as well.
-        shooting = isAnyKeyPressed(config.button_shoot);
-        zooming = isAnyKeyPressed(config.button_zoom);
+        {
+            bool new_shooting = isAnyKeyPressed(config.button_shoot);
+            {
+                static bool last_shooting = false;
+                if (new_shooting != last_shooting) {
+                    last_shooting = new_shooting;
+                    std::cout << "[Input] button_shoot → "
+                              << (new_shooting ? "PRESSED" : "RELEASED") << std::endl;
+                }
+            }
+            shooting = new_shooting;
+        }
+        {
+            bool new_zooming = isAnyKeyPressed(config.button_zoom);
+            {
+                static bool last_zooming = false;
+                if (new_zooming != last_zooming) {
+                    last_zooming = new_zooming;
+                    std::cout << "[Input] button_zoom → "
+                              << (new_zooming ? "PRESSED" : "RELEASED") << std::endl;
+                }
+            }
+            zooming = new_zooming;
+        }
 
         // Triggerbot button should reflect current physical state (no latch).
         {

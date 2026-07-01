@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <cctype>
 #include <chrono>
 #include <iostream>
@@ -423,6 +424,16 @@ void MakcuConnection::sendMouseFrame(int16_t dx, int16_t dy,
     for (int i = 0; i < 9; i++) csum ^= frame[i];
     frame[9] = csum;
 
+    {
+        static auto lastLog = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (now - lastLog >= std::chrono::seconds(1)) {
+            lastLog = now;
+            printf("[Makcu::sendFrame] SOF=%02X OP=%02X dx=%d dy=%d btns=%02X whl=%d hwhl=%d cs=%02X\n",
+                   frame[0], frame[1], dx, dy, buttons, wheel, hwheel, csum);
+        }
+    }
+
     std::lock_guard<std::mutex> lock(write_mutex_);
     try {
         serial_.write(frame, 10);
@@ -435,6 +446,14 @@ void MakcuConnection::sendMouseFrame(int16_t dx, int16_t dy,
 /* ── High-level mouse operations ──────────────────────────────────── */
 void MakcuConnection::move(int x, int y)
 {
+    {
+        static auto lastLog = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (now - lastLog >= std::chrono::seconds(1)) {
+            lastLog = now;
+            printf("[Makcu::move] dx=%d dy=%d button_mask=0x%02X\n", x, y, button_mask_);
+        }
+    }
     sendMouseFrame(static_cast<int16_t>(x), static_cast<int16_t>(y), button_mask_);
 }
 
@@ -510,8 +529,28 @@ void MakcuConnection::listeningThreadFunc()
                     //   0 = frame XOR ok,  1 = buf pushed, 2 = buf dropped
                     //   3 = USB send ok,   4 = USB busy,   5 = USB fail
                     //   6 = XOR error,     7 = UART overrun
+                    {
+                        static auto lastLog = std::chrono::steady_clock::now();
+                        auto now = std::chrono::steady_clock::now();
+                        if (now - lastLog >= std::chrono::seconds(1)) {
+                            lastLog = now;
+                            printf("[Makcu::response] status=0x%02X"
+                                   " (XOR_ok=%d buf_pushed=%d buf_dropped=%d"
+                                   " USB_send_ok=%d USB_busy=%d USB_fail=%d"
+                                   " XOR_err=%d UART_overrun=%d)\n",
+                                   rx_status,
+                                   (rx_status & 0x01) ? 1 : 0,
+                                   (rx_status & 0x02) ? 1 : 0,
+                                   (rx_status & 0x04) ? 1 : 0,
+                                   (rx_status & 0x08) ? 1 : 0,
+                                   (rx_status & 0x10) ? 1 : 0,
+                                   (rx_status & 0x20) ? 1 : 0,
+                                   (rx_status & 0x40) ? 1 : 0,
+                                   (rx_status & 0x80) ? 1 : 0);
+                        }
+                    }
                     if (rx_status & 0xC0) {
-                        std::cerr << "[Makcu] FW status: 0x"
+                        std::cerr << "[Makcu] FW error: 0x"
                                   << std::hex << static_cast<int>(rx_status)
                                   << std::dec << '\n';
                     }

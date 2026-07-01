@@ -10,6 +10,7 @@
 #include <mutex>
 #include <atomic>
 #include <vector>
+#include <iostream>
 
 #include "mouse.h"
 #include "capture.h"
@@ -145,6 +146,14 @@ void MouseThread::moveWorkerLoop()
             Move m = moveQueue.front();
             moveQueue.pop();
             ul.unlock();
+            {
+                static auto lastLog = std::chrono::steady_clock::now();
+                auto now = std::chrono::steady_clock::now();
+                if (now - lastLog >= std::chrono::seconds(1)) {
+                    lastLog = now;
+                    std::cout << "[Mouse::moveWorkerLoop] dequeued dx=" << m.dx << " dy=" << m.dy << std::endl;
+                }
+            }
             sendMovementToDriver(m.dx, m.dy);
             ul.lock();
         }
@@ -553,6 +562,20 @@ std::pair<double, double> MouseThread::predict_target_position(double target_x, 
 void MouseThread::sendMovementToDriver(int dx, int dy)
 {
     std::lock_guard<std::mutex> lock(input_method_mutex);
+    {
+        static auto lastLog = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (now - lastLog >= std::chrono::seconds(1)) {
+            lastLog = now;
+            const char* dev = "NONE(dropped)";
+            if (makcu) dev = "MAKCU";
+            else if (kmbox) dev = "KMBOX_B";
+            else if (kmbox_net) dev = "KMBOX_NET";
+            else if (serial) dev = "SERIAL";
+            std::cout << "[Mouse::sendMovementToDriver] dx=" << dx << " dy=" << dy
+                      << " → " << dev << std::endl;
+        }
+    }
     if (makcu)
     {
         makcu->move(dx, dy);

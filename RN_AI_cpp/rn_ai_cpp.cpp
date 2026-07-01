@@ -25,6 +25,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <deque>
+#include <vector>
+#include <string>
 #include <random>
 #include <cctype>
 #include <algorithm>
@@ -1310,6 +1312,23 @@ void SetConsoleFileLoggingEnabled(bool enabled, bool clear_on_enable)
 //namespace "std::filesystem" has no member "exists"
 //syntax error : ')'
 //use of undefined type 'std::filesystem::path'
+static std::vector<std::string> enumerateComPorts()
+{
+    std::vector<std::string> ports;
+    char buf[16];
+    for (int i = 1; i <= 256; ++i)
+    {
+        snprintf(buf, sizeof(buf), "COM%d", i);
+        HANDLE h = CreateFileA(buf, 0, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+        if (h != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(h);
+            ports.push_back(buf);
+        }
+    }
+    return ports;
+}
+
 void createInputDevices()
 {
     if (arduinoSerial)
@@ -1365,13 +1384,33 @@ void createInputDevices()
     else if (config.input_method == "MAKCU")
     {
         std::cout << "[Mouse] Using Makcu method input." << std::endl;
-        makcu_conn = new MakcuConnection(config.makcu_port, config.makcu_baudrate);
-        if (!makcu_conn->isOpen())
+        auto comPorts = enumerateComPorts();
+        // Try configured port first, then scan all available ports
+        if (!config.makcu_port.empty() && config.makcu_port != "COM0")
         {
-            std::cerr << "[Makcu] Error connecting to Makcu." << std::endl;
+            auto it = std::find(comPorts.begin(), comPorts.end(), config.makcu_port);
+            if (it != comPorts.end())
+            {
+                comPorts.erase(it);
+                comPorts.insert(comPorts.begin(), config.makcu_port);
+            }
+        }
+        for (const auto& port : comPorts)
+        {
+            std::cout << "[Makcu] Trying " << port << "... " << std::flush;
+            makcu_conn = new MakcuConnection(port, config.makcu_baudrate);
+            if (makcu_conn->isOpen())
+            {
+                std::cout << "OK!" << std::endl;
+                config.makcu_port = port;
+                break;
+            }
+            std::cout << "failed." << std::endl;
             delete makcu_conn;
             makcu_conn = nullptr;
         }
+        if (!makcu_conn)
+            std::cerr << "[Makcu] Error connecting to Makcu on any port." << std::endl;
     }
     else
     {
@@ -1756,7 +1795,7 @@ void mouseThreadFunction(MouseThread& mouseThread)
                      tm.tm_hour, tm.tm_min, tm.tm_sec);
             g_inf_log.open(name, std::ios::out | std::ios::binary);
             if (g_inf_log.is_open())
-                g_inf_log << "ts\tfps\tinf_ms\tdet\tcand\tclk_aim\ttgt_cls" << std::endl;
+                g_inf_log << "ts\tfps\tpre_ms\tinf_ms\tcpy_ms\tpst_ms\tnms_ms\tdet\tcand\tclk_aim\ttgt_cls" << std::endl;
         }
     });
     static auto g_inf_last_log = std::chrono::steady_clock::now();
@@ -2203,9 +2242,26 @@ void mouseThreadFunction(MouseThread& mouseThread)
                 float lat = GetOverlayInferenceLatencyMs();
                 snprintf(lat_buf, sizeof(lat_buf), "%.1f", lat);
 
+                float pre_ms = 0, cpy_ms = 0, pst_ms = 0, nms_ms = 0;
+                if (config.backend == "DML" && dml_detector) {
+                    pre_ms = static_cast<float>(dml_detector->lastPreprocessTimeDML.count());
+                    cpy_ms = static_cast<float>(dml_detector->lastCopyTimeDML.count());
+                    pst_ms = static_cast<float>(dml_detector->lastPostprocessTimeDML.count());
+                    nms_ms = static_cast<float>(dml_detector->lastNmsTimeDML.count());
+                }
+                char pre_buf[16], cpy_buf[16], pst_buf[16], nms_buf[16];
+                snprintf(pre_buf, sizeof(pre_buf), "%.1f", pre_ms);
+                snprintf(cpy_buf, sizeof(cpy_buf), "%.1f", cpy_ms);
+                snprintf(pst_buf, sizeof(pst_buf), "%.1f", pst_ms);
+                snprintf(nms_buf, sizeof(nms_buf), "%.1f", nms_ms);
+
                 g_inf_log << ts << '\t'
                           << captureFps.load() << '\t'
+                          << pre_buf << '\t'
                           << lat_buf << '\t'
+                          << cpy_buf << '\t'
+                          << pst_buf << '\t'
+                          << nms_buf << '\t'
                           << boxes.size() << '\t'
                           << candidates.size() << '\t'
                           << (aiming.load() ? 'Y' : 'N') << '\t';

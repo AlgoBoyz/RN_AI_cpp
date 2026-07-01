@@ -142,7 +142,7 @@ struct Game_overlay::Impl
     std::thread thread;
     std::atomic<bool> running{ false };
     std::atomic<bool> visible{ true };
-    std::atomic<bool> excludeFromCapture{ true };
+    std::atomic<bool> excludeFromCapture{ false };
     bool appliedExcludeFromCapture = true;
     std::atomic<unsigned> maxFps{ 0 };
 
@@ -459,7 +459,7 @@ bool Game_overlay::Impl::CreateWindowAndDevices()
     if (!RegisterClassExW(&wc))
         return false;
 
-    DWORD ex = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED;
+    DWORD ex = WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED;
     hwnd = CreateWindowExW(ex, wc.lpszClassName, window_title_.c_str(), WS_POPUP,
         winX, winY, winW, winH, nullptr, nullptr, hinst, this);
     if (!hwnd) return false;

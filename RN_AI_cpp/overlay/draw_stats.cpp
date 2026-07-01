@@ -28,7 +28,14 @@ void draw_stats()
     float current_post = 0.0f;
     float current_nms = 0.0f;
 
-    if (config.backend == "DML" && dml_detector) {}
+    if (config.backend == "DML" && dml_detector)
+    {
+        current_preprocess = static_cast<float>(dml_detector->lastPreprocessTimeDML.count());
+        current_inference = static_cast<float>(dml_detector->lastInferenceTimeDML.count());
+        current_copy = static_cast<float>(dml_detector->lastCopyTimeDML.count());
+        current_post = static_cast<float>(dml_detector->lastPostprocessTimeDML.count());
+        current_nms = static_cast<float>(dml_detector->lastNmsTimeDML.count());
+    }
 #ifdef USE_CUDA
     else
     {
