@@ -1,0 +1,11 @@
+--- a/debian/rules	2017-04-06 11:27:10.682100692 +0200
++++ b/debian/rules	2017-04-06 11:27:47.386780364 +0200
+@@ -10,7 +10,7 @@ LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH)
+ 
+ override_dh_auto_configure:
+ 	./autogen.sh || true
+-	dh_auto_configure -- --disable-static --enable-opengl --libdir=$(LIBDIR) # LDFLAGS="$(LDFLAGS) -Wl,-rpath=$(JPEGLIBDIR)"
++	dh_auto_configure -- --disable-static --enable-opengl --libdir=$(LIBDIR) --with-cuda-host-compiler=clang # LDFLAGS="$(LDFLAGS) -Wl,-rpath=$(JPEGLIBDIR)"
+ 
+ #override_dh_auto_install:
+ #	dh_auto_install

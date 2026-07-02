@@ -1,0 +1,231 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches:
+      - devel
+      - master
+    paths:
+      - '.github/scripts/**'
+      - '.github/workflows/ccpp.yml'
+      - '**.c'
+      - '**.cpp'
+      - '**.cu'
+      - '**.h'
+      - '**.hpp'
+      - '**.m'
+      - '**.mm'
+      - 'CMakeLists.txt'
+      - 'libgpujpeg.pc.*'
+
+jobs:
+  retag-continuous:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, we do not need to create own token.
+    steps:
+    - uses: actions/checkout@main
+      if: github.repository == 'CESNET/GPUJPEG' && github.ref == 'refs/heads/master'
+      with:
+        persist-credentials: true
+    - name: Retag continuous
+      if: github.repository == 'CESNET/GPUJPEG' && github.ref == 'refs/heads/master'
+      run: |
+        git tag -f continuous
+        git push -f origin refs/tags/continuous:refs/tags/continuous
+
+  Ubuntu:
+    name: run Ubuntu
+    needs: retag-continuous
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        conf: [legacy, all]
+        include:
+          - conf: legacy
+            cuda_arch: 30
+            tar_name: GPUJPEG-Linux.tar.xz
+            name: Linux build
+            cuda_repo: ubuntu1804
+            cuda_pkg: cuda-toolkit-10-2
+          - conf: all
+            cuda_arch: all
+            tar_name: GPUJPEG-Linux-all.tar.xz
+            name: Linux build (all CUDA architetures)
+            cuda_repo: ubuntu2004
+            cuda_pkg: cuda-toolkit
+
+    steps:
+    - uses: actions/checkout@main
+    - name: Install
+      run: |
+        sudo apt update
+        sudo apt install cmake jq
+    - name: Install NVIDIA-distributed CUDA
+      run: |
+        wget https://developer.download.nvidia.com/compute/cuda/repos/\
+        ${{ matrix.cuda_repo }}/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        cuda_compiler_pkg=$(apt-get -s install ${{ matrix.cuda_pkg }} | grep\
+          cuda-compiler | head -n 1 | sed 's/.*\(cuda-compiler[-0-9]*\).*/\1/')
+        sudo apt-get -y install "$cuda_compiler_pkg"
+        echo CUDACXX=/usr/local/cuda/bin/nvcc >> "$GITHUB_ENV"
+    - name: Install GCC 8 for CUDA 10.2 + symlink the toolkit
+      if: matrix.conf == 'legacy'
+      run: |
+        sudo ln -s /usr/local/cuda-10.2 /usr/local/cuda
+        echo 'deb http://archive.ubuntu.com/ubuntu/ focal main universe'\
+          | sudo tee -a /etc/apt/sources.list
+        sudo apt update
+        sudo apt install cuda-cudart-dev-10-2 gcc-8 g++-8
+        sudo ln -sf /usr/bin/gcc-8 /usr/local/cuda/bin/gcc
+    - name: Build
+      run: |
+        COMMON_FLAGS="-DCMAKE_CUDA_ARCHITECTURES=${{ matrix.cuda_arch }}\
+         -DCMAKE_BUILD_TYPE=Release\
+         -DCMAKE_INSTALL_RPATH='$ORIGIN/../lib'\
+         -DENABLE_FPNGE=ON"
+        cmake $COMMON_FLAGS -Bbuild .
+        cmake --build build --parallel
+        ctest -R unittests
+        cmake --install build --prefix GPUJPEG
+        tar_name=${{ matrix.tar_name }}
+        tar_name=${tar_name%.xz}
+        tar cf $tar_name GPUJPEG
+        for v in 3 4; do
+           m=$([ $v -eq 3 ] && echo haswell || echo skylake-avx512)
+           cmake $COMMON_FLAGS\
+           -DCMAKE_C_FLAGS=-march=$m\
+           -DCMAKE_CXX_FLAGS=-march=$m\
+           -DCMAKE_CUDA_FLAGS="-Xcompiler -march=$m"\
+           -Bbuild-v$v .
+          cmake --build build-v$v --parallel
+          cmake --install build-v$v --prefix GPUJPEG-x86-64-v$v
+          tar rf $tar_name GPUJPEG-x86-64-v$v
+        done
+        xz $tar_name
+
+    - name: Upload Archive
+      if: github.repository != 'CESNET/GPUJPEG' || github.ref != 'refs/heads/master'
+      uses: actions/upload-artifact@main
+      with:
+        name: GPUJPEG CI ${{ matrix.name }}
+        path: ${{ matrix.tar_name }}
+
+    - name: Upload Release Build Asset
+      if: github.repository == 'CESNET/GPUJPEG' && github.ref == 'refs/heads/master'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: .github/scripts/replace-asset.sh continuous ${{ matrix.tar_name }}
+        application/x-gtar "${{ matrix.name }}"
+
+  Windows:
+    name: run Windows
+    needs: retag-continuous
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        include:
+          - conf: legacy
+            build_filename: GPUJPEG-Windows
+            cuda_arch: 35
+            cuda_installer: "https://developer.download.nvidia.com/compute/\
+              cuda/11.8.0/network_installers/cuda_11.8.0_windows_network.exe"
+            name_prefix: Windows
+          - conf: all
+            build_filename: GPUJPEG-Windows-all
+            cuda_arch: all
+            cuda_installer: "https://developer.download.nvidia.com/compute/\
+              cuda/12.9.1/network_installers/cuda_12.9.1_windows_network.exe"
+            name_prefix: Windows (all CUDA architectures)
+
+    steps:
+    - uses: actions/checkout@main
+    - name: install CUDA
+      run: |
+        #choco install cuda -y --no-progress --version=10.1.243
+        $installer="${{ matrix.cuda_installer }}"
+        $installer -match 'cuda_(?<version>[0-9]+.[0-9]+)'
+        $version=$Matches.version # major.minor (without patch level)
+        Invoke-WebRequest $installer -OutFile cuda_inst.exe
+        Start-Process -FilePath "cuda_inst.exe" -ArgumentList "-s cudart_$version nvcc_$version visual_studio_integration_$version" -Wait -NoNewWindow
+    - name: install NSIS
+      run: choco install nsis -y --no-progress
+    - name: install GLFW
+      run: |
+        Invoke-WebRequest 'https://github.com/glfw/glfw/releases/download/3.3.3/glfw-3.3.3.bin.win64.zip' -OutFile glfw.zip
+        Expand-Archive -LiteralPath 'glfw.zip' -DestinationPath 'C:\'
+        Move-Item 'C:\glfw-3.3.3.bin.WIN64' 'C:\glfw'
+    - name: install GLEW
+      run: |
+        Invoke-WebRequest 'https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0-win32.zip' -OutFile glew.zip
+        Expand-Archive -LiteralPath 'glew.zip' -DestinationPath 'C:\'
+        Move-Item 'C:\glew-2.2.0' 'C:\glew'
+    - name: Build
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $PSNativeCommandUseErrorActionPreference = $true
+        #Set-PSDebug -Trace 1
+        $env:ChocolateyInstall = Convert-Path "$((Get-Command choco).Path)\..\.."
+        Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+        refreshenv
+        $Env:NVCC_PREPEND_FLAGS="-allow-unsupported-compiler -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"
+        # TODO: figure out if setting CMAKE_SYSTEM_VERSION is needed/best solution
+        cmake.exe `
+         -DBUILD_OPENGL=ON `
+         -DCMAKE_BUILD_TYPE=Release `
+         -DCMAKE_CUDA_ARCHITECTURES=${{ matrix.cuda_arch }} `
+         -DCMAKE_SYSTEM_VERSION=10.0.18362 `
+         -DENABLE_FPNGE=ON `
+         -DGLEW_ROOT='C:\glew' `
+         -DGLEW_USE_STATIC_LIBS=ON `
+         -DGLFW_ROOT_DIR='C:\glfw' `
+         -DGLFW_USE_STATIC_LIBS=ON `
+         -Bbuild .
+        cmake.exe --build build --config Release --parallel (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+        cmake.exe --install build --prefix GPUJPEG
+        cpack.exe --config build/CPackConfig.cmake -GNSIS64
+        Compress-Archive -Path GPUJPEG -DestinationPath GPUJPEG
+
+    - name: Upload Archive
+      if: github.repository != 'CESNET/GPUJPEG' || github.ref != 'refs/heads/master'
+      uses: actions/upload-artifact@main
+      with:
+        name: GPUJPEG CI ${{ matrix.name_prefix }} build
+        path: GPUJPEG
+
+    - name: Upload Installer
+      if: github.repository != 'CESNET/GPUJPEG' || github.ref != 'refs/heads/master'
+      uses: actions/upload-artifact@main
+      with:
+        name: GPUJPEG CI ${{ matrix.name_prefix }} installer
+        path: gpujpeg-*-win64.exe
+
+    - name: Upload Release Build Asset
+      if: github.repository == 'CESNET/GPUJPEG' && github.ref == 'refs/heads/master'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        fname="${{ matrix.build_filename }}.zip"
+        mv GPUJPEG.zip "./$fname"
+        pacman -Sy --noconfirm mingw-w64-x86_64-jq
+        PATH=/mingw64/bin:$PATH
+        echo 'PATH=/mingw64/bin:$PATH' >> ~/.bash_profile # store the path also for next step
+        .github/scripts/replace-asset.sh continuous "$fname"\
+         application/zip "${{ matrix.name_prefix }} build"
+      shell: C:\shells\msys2bash.cmd {0}
+
+    - name: Upload Release Installer Asset
+      if: github.repository == 'CESNET/GPUJPEG' && github.ref == 'refs/heads/master'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        fname="${{ matrix.build_filename }}.exe"
+        mv gpujpeg-*-win64.exe "./$fname"
+        .github/scripts/replace-asset.sh continuous "$fname" \
+          application/vnd.microsoft.portable-executable\
+          "${{ matrix.name_prefix }} installer"
+      shell: C:\shells\msys2bash.cmd {0}
+
+# vi: set expandtab sw=2:
