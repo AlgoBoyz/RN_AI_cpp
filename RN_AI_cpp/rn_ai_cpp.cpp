@@ -2371,6 +2371,9 @@ int main()
             }
         }
 
+        // Initialize async logger early so all threads can log
+        AsyncLogger::instance().init();
+
         createInputDevices();
 
         MouseThread mouseThread(

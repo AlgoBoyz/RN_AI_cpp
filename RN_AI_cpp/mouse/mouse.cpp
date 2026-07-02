@@ -140,40 +140,49 @@ void MouseThread::queueMove(int dx, int dy)
 
 void MouseThread::moveWorkerLoop()
 {
+    std::cout << "[moveWorker] started" << std::endl;
     ALOG("move_worker: started");
     uint64_t send_count = 0;
+    int tick_count = 0;
     while (!workerStop)
     {
         std::unique_lock ul(queueMtx);
         queueCv.wait_for(ul, std::chrono::milliseconds(1), [&] { return workerStop || !moveQueue.empty(); });
+        tick_count++;
+        if (tick_count % 1000 == 0)
+            std::cout << "[moveWorker] alive tick=" << tick_count << std::endl;
 
+        // Drain human mouse on every tick, regardless of AI data
+        int human_dx = 0, human_dy = 0;
+        if (g_mouse_input && config.fusion_mode != 1) {
+            auto raw = g_mouse_input->drain();
+            human_dx = raw.dx; human_dy = raw.dy;
+            if (human_dx || human_dy)
+                std::cout << "[moveWorker] human dx=" << human_dx << " dy=" << human_dy << std::endl;
+        }
+
+        // Take only the latest AI entry, discard stale ones
         int ai_dx = 0, ai_dy = 0;
-        while (!moveQueue.empty())
-        {
+        while (!moveQueue.empty()) {
             Move m = moveQueue.front();
             moveQueue.pop();
-            ai_dx = m.dx; ai_dy = m.dy;
-            ul.unlock();
-
-            int human_dx = 0, human_dy = 0;
-            if (config.fusion_mode == 0) { m.dx = 0; m.dy = 0; }
-            if (g_mouse_input && config.fusion_mode != 1) {
-                auto raw = g_mouse_input->drain();
-                human_dx = raw.dx; human_dy = raw.dy;
-                m.dx += raw.dx; m.dy += raw.dy;
-            }
-
-            send_count++;
-            if (send_count % 100 == 1) {
-                const char* mn = "Bridge";
-                if (config.fusion_mode == 1) mn = "Correction";
-                else if (config.fusion_mode == 2) mn = "Fusion";
-                ALOG("move_worker: ai=(%d,%d) human=(%d,%d) fused=(%d,%d) mode=%s",
-                     ai_dx, ai_dy, human_dx, human_dy, m.dx, m.dy, mn);
-            }
-            if (m.dx || m.dy) sendMovementToDriver(m.dx, m.dy);
-            ul.lock();
+            ai_dx = (config.fusion_mode == 0) ? 0 : m.dx;
+            ai_dy = (config.fusion_mode == 0) ? 0 : m.dy;
         }
+        ul.unlock();
+
+        int final_dx = human_dx + ai_dx;
+        int final_dy = human_dy + ai_dy;
+
+        send_count++;
+        if (send_count % 100 == 1 || human_dx || human_dy || ai_dx || ai_dy) {
+            const char* mn = "Bridge";
+            if (config.fusion_mode == 1) mn = "Correction";
+            else if (config.fusion_mode == 2) mn = "Fusion";
+            ALOG("move_worker: ai=(%d,%d) human=(%d,%d) fused=(%d,%d) mode=%s",
+                 ai_dx, ai_dy, human_dx, human_dy, final_dx, final_dy, mn);
+        }
+        if (final_dx || final_dy) sendMovementToDriver(final_dx, final_dy);
     }
     ALOG("move_worker: stopped");
 }

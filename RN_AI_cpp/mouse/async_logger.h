@@ -20,13 +20,14 @@ public:
 
     void init() {
         const char* p = getenv("USERPROFILE");
-        if (!p) { inited_ = false; return; }
+        if (!p) { inited_ = false; printf("[AsyncLogger] FAIL no USERPROFILE\n"); return; }
         char path[MAX_PATH];
         sprintf_s(path, "%s\\rn_ai", p);
         CreateDirectoryA(path, nullptr);
         sprintf_s(path, "%s\\rn_ai\\fusion.log", p);
         fopen_s(&fp_, path, "w");
-        if (!fp_) { inited_ = false; return; }
+        if (!fp_) { inited_ = false; printf("[AsyncLogger] FAIL fopen %s\n", path); return; }
+        printf("[AsyncLogger] init ok -> %s\n", path);
         inited_ = true; running_ = true;
         worker_ = std::thread([this]() {
             while (running_ || !q_.empty()) {
