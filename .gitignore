@@ -51,8 +51,9 @@ sunone_aimbot_cpp/modules/SimpleIni.h
 sunone_aimbot_cpp/config.ini
 /sunone_aimbot_cpp/sunone_aimbot_cpp.zip
 /sunone_aimbot_cpp/RN_AI
-# vendor
-vendor/
+# vendor (gpujpeg source tracked)
+vendor/*
+!vendor/gpujpeg/
 .trae/
 
 # build artifacts
