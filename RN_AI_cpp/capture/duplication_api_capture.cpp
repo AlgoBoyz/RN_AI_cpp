@@ -12,7 +12,6 @@
 #endif
 
 #include "duplication_api_capture.h"
-#include "rn_ai_cpp.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")

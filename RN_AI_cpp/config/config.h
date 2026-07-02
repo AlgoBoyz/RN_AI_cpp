@@ -236,6 +236,13 @@ public:
     int obs_port;
     int obs_fps;
 
+    // UDP transport
+    int udp_recv_port;
+    std::string udp_send_ip;
+    int udp_send_port;
+    int udp_jpeg_quality;
+    int udp_crop_size;
+
     // Custom Classes
     int class_player;                  // 0
     int class_bot;                     // 1

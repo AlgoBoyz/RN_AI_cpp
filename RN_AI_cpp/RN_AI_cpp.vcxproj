@@ -14,11 +14,76 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\test_udp_sender.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\test_udp_receiver.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="capture\capture.cpp" />
     <ClCompile Include="capture\capture_utils.cpp" />
     <ClCompile Include="capture\duplication_api_capture.cpp" />
+    <ClCompile Include="capture\udp_frame_receiver.cpp" />
+    <ClCompile Include="capture\udp_wire_protocol.cpp" />
     <ClCompile Include="capture\virtual_camera.cpp" />
     <ClCompile Include="capture\winrt_capture.cpp" />
+    <ClCompile Include="..\codec\gpu_jpeg_codec.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_decoder.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_encoder.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_common.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_dct_cpu.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_exif.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_huffman_cpu_decoder.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_huffman_cpu_encoder.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_reader.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_table.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_writer.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\utils\image_delegate.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\utils\pam.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\utils\y4m.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <ClCompile Include="config\config.cpp" />
     <ClCompile Include="detector\color_detector.cpp" />
     <ClCompile Include="detector\detection_buffer.cpp" />
@@ -26,7 +91,9 @@
     <ClCompile Include="detector\postProcess.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">false</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="detector\trt_detector.cpp" />
+    <ClCompile Include="detector\trt_detector.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_draw.cpp" />
     <ClCompile Include="imgui\imgui_impl_dx11.cpp" />
@@ -69,8 +136,16 @@
     <ClInclude Include="capture\capture.h" />
     <ClInclude Include="capture\capture_utils.h" />
     <ClInclude Include="capture\duplication_api_capture.h" />
+    <ClInclude Include="capture\udp_frame_receiver.h" />
+    <ClInclude Include="capture\udp_wire_protocol.h" />
     <ClInclude Include="capture\virtual_camera.h" />
     <ClInclude Include="capture\winrt_capture.h" />
+    <ClInclude Include="codec\gpu_jpeg_codec.h" />
+    <ClInclude Include="..\vendor\gpujpeg\libgpujpeg\gpujpeg.h" />
+    <ClInclude Include="..\vendor\gpujpeg\libgpujpeg\gpujpeg_common.h" />
+    <ClInclude Include="..\vendor\gpujpeg\libgpujpeg\gpujpeg_decoder.h" />
+    <ClInclude Include="..\vendor\gpujpeg\libgpujpeg\gpujpeg_encoder.h" />
+    <ClInclude Include="..\vendor\gpujpeg\libgpujpeg\gpujpeg_type.h" />
     <ClInclude Include="config\config.h" />
     <ClInclude Include="detector\color_detector.h" />
     <ClInclude Include="detector\detection_buffer.h" />
@@ -133,6 +208,26 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">false</ExcludedFromBuild>
       <CodeGeneration Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">compute_75,sm_75</CodeGeneration>
     </CudaCompile>
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_dct_gpu.cu">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">false</ExcludedFromBuild>
+    </CudaCompile>
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_huffman_gpu_decoder.cu">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">false</ExcludedFromBuild>
+    </CudaCompile>
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_huffman_gpu_encoder.cu">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">false</ExcludedFromBuild>
+    </CudaCompile>
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_postprocessor.cu">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">false</ExcludedFromBuild>
+    </CudaCompile>
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_preprocessor.cu">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DML|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">false</ExcludedFromBuild>
+    </CudaCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -172,15 +267,15 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">
     <LinkIncremental>false</LinkIncremental>
     <IntDir>$(Platform)\$(Configuration)\$(MSBuildProjectName)\</IntDir>
-    <IncludePath>$(MSBuildProjectDirectory)\modules\serial\include;$(MSBuildProjectDirectory);$(MSBuildProjectDirectory)\imgui;$(MSBuildProjectDirectory)\keyboard;$(MSBuildProjectDirectory)\config;$(MSBuildProjectDirectory)\tensorrt;$(MSBuildProjectDirectory)\detector;$(MSBuildProjectDirectory)\mouse;$(MSBuildProjectDirectory)\overlay;$(MSBuildProjectDirectory)\capture;$(MSBuildProjectDirectory)\modules\opencv\opencv\build\install\include;$(WindowsSDK_IncludePath);$(WindowsSDK_IncludePath)\cppwinrt;$(MSBuildProjectDirectory)\modules\TensorRT-10.8.0.43\include;include;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v12.8\include;$(ProgramW6432)\NVIDIA\CUDNN\v9.7\include\12.8;$(IncludePath)</IncludePath>
-    <LibraryPath>$(MSBuildProjectDirectory)\modules\serial\visual_studio\x64\Release;$(MSBuildProjectDirectory)\modules\glfw-3.4.bin.WIN64\lib-vc2019;$(MSBuildProjectDirectory)\modules\opencv\opencv\build\install\x64\vc16\lib;$(MSBuildProjectDirectory)\modules\\TensorRT-10.8.0.43\lib;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v12.8\lib\x64;$(ProgramW6432)\NVIDIA\CUDNN\v9.7\lib\12.8;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(MSBuildProjectDirectory)\modules\serial\include;$(MSBuildProjectDirectory);$(MSBuildProjectDirectory)\imgui;$(MSBuildProjectDirectory)\keyboard;$(MSBuildProjectDirectory)\config;$(MSBuildProjectDirectory)\tensorrt;$(MSBuildProjectDirectory)\detector;$(MSBuildProjectDirectory)\mouse;$(MSBuildProjectDirectory)\overlay;$(MSBuildProjectDirectory)\capture;$(MSBuildProjectDirectory)\..\vendor\opencv\install\include;$(WindowsSDK_IncludePath);$(WindowsSDK_IncludePath)\cppwinrt;$(MSBuildProjectDirectory)\modules\TensorRT-10.8.0.43\include;include;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v12.8\include;$(ProgramW6432)\NVIDIA\CUDNN\v9.7\include\12.8;$(IncludePath)</IncludePath>
+    <LibraryPath>$(MSBuildProjectDirectory)\..\vendor\serial\visual_studio\serial\x64\Release;$(MSBuildProjectDirectory)\..\vendor\glfw-prebuilt\glfw-3.4.bin.WIN64\lib-vc2022;$(MSBuildProjectDirectory)\..\vendor\opencv\install\x64\vc17\lib;$(MSBuildProjectDirectory)\modules\\TensorRT-10.8.0.43\lib;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v12.8\lib\x64;$(ProgramW6432)\NVIDIA\CUDNN\v9.7\lib\12.8;$(LibraryPath)</LibraryPath>
     <TargetName>winrt</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DML|x64'">
     <LinkIncremental>false</LinkIncremental>
     <IntDir>$(Platform)\$(Configuration)\$(MSBuildProjectName)\</IntDir>
-    <IncludePath>$(MSBuildProjectDirectory)\modules\serial\include;$(MSBuildProjectDirectory);$(MSBuildProjectDirectory)\imgui;$(MSBuildProjectDirectory)\keyboard;$(MSBuildProjectDirectory)\config;$(MSBuildProjectDirectory)\detector;$(MSBuildProjectDirectory)\mouse;$(MSBuildProjectDirectory)\overlay;$(MSBuildProjectDirectory)\capture;$(MSBuildProjectDirectory)\modules\opencv\opencv\build\install\include;$(WindowsSDK_IncludePath);$(WindowsSDK_IncludePath)\cppwinrt;include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(MSBuildProjectDirectory)\modules\serial\visual_studio\x64\Release;$(MSBuildProjectDirectory)\modules\glfw-3.4.bin.WIN64\lib-vc2019;$(MSBuildProjectDirectory)\modules\opencv\opencv\build\install\x64\vc16\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(MSBuildProjectDirectory)\..\vendor\serial\include;$(MSBuildProjectDirectory);$(MSBuildProjectDirectory)\imgui;$(MSBuildProjectDirectory)\keyboard;$(MSBuildProjectDirectory)\config;$(MSBuildProjectDirectory)\detector;$(MSBuildProjectDirectory)\mouse;$(MSBuildProjectDirectory)\overlay;$(MSBuildProjectDirectory)\capture;$(MSBuildProjectDirectory)\..\vendor\opencv\opencv\build\include;$(MSBuildProjectDirectory)\..\vendor\simpleini;$(MSBuildProjectDirectory)\..\vendor\stb;$(MSBuildProjectDirectory)\..\vendor\gpujpeg;$(MSBuildProjectDirectory)\..\vendor\glfw-prebuilt\glfw-3.4.bin.WIN64\include;$(WindowsSDK_IncludePath);$(WindowsSDK_IncludePath)\cppwinrt;include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(MSBuildProjectDirectory)\..\vendor\serial\visual_studio\serial\x64\Release;$(MSBuildProjectDirectory)\..\vendor\glfw-prebuilt\glfw-3.4.bin.WIN64\lib-vc2022;$(MSBuildProjectDirectory)\..\vendor\opencv\opencv\build\x64\vc16\lib;$(LibraryPath)</LibraryPath>
     <TargetName>winrt</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='CUDA|x64'">
@@ -189,9 +284,9 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;USE_CUDA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>GPUJPEG_STATIC;_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;USE_CUDA;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(MSBuildProjectDirectory)\modules\glfw-3.4.bin.WIN64\include;$(MSBuildProjectDirectory)\modules\stb;$(MSBuildProjectDirectory)\modules\imgui-1.91.2\backends;$(MSBuildProjectDirectory)\modules\imgui-1.91.2;$(MSBuildProjectDirectory)\modules\makcu\include;$(MSBuildProjectDirectory)\modules\vcpkg-master\installed\x64-windows\include;&lt;VCPKG_ROOT&gt;\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildProjectDirectory)\..\vendor\glfw\include;$(MSBuildProjectDirectory)\..\vendor\stb;$(MSBuildProjectDirectory)\..\vendor\opencv\install\include;$(MSBuildProjectDirectory)\..\vendor\serial\include;$(MSBuildProjectDirectory)\..\vendor\simpleini;$(MSBuildProjectDirectory)\modules\imgui-1.91.2\backends;$(MSBuildProjectDirectory)\modules\imgui-1.91.2;$(MSBuildProjectDirectory)\modules\makcu\include;$(MSBuildProjectDirectory)\modules\vcpkg-master\installed\x64-windows\include;&lt;VCPKG_ROOT&gt;\installed\x64-windows\include;$(MSBuildProjectDirectory)\..\vendor\gpujpeg;E:\Work\Code\TensorRT-10.9.0.34\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -203,13 +298,14 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>opencv_world4100.lib;nvinfer_10.lib;nvonnxparser_10.lib;WindowsApp.lib;d3d11.lib;dxgi.lib;d2d1.lib;cuda.lib;cudart.lib;glfw3_mt.lib;glfw3dll.lib;serial.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(MSBuildProjectDirectory)\modules\opencv\build\install\include\opencv2;$(MSBuildProjectDirectory)\modules\opencv\build\install\x64\vc17\lib;$(MSBuildProjectDirectory)\modules\opencv\build\install\x64\vc17\bin;$(MSBuildProjectDirectory)\modules\vcpkg-master\installed\x64-windows\lib;$(MSBuildProjectDirectory)\modules;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(MSBuildProjectDirectory)\..\vendor\opencv\install\x64\vc17\lib;$(MSBuildProjectDirectory)\modules\vcpkg-master\installed\x64-windows\lib;E:\Work\Code\TensorRT-10.9.0.34\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <Manifest>
       <GenerateCatalogFiles>false</GenerateCatalogFiles>
     </Manifest>
     <CudaCompile>
       <CodeGeneration>compute_52,sm_52</CodeGeneration>
+      <AdditionalOptions>-Xcompiler "/Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DML|x64'">
@@ -219,9 +315,9 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>GPUJPEG_STATIC;_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(MSBuildProjectDirectory)\modules\glfw-3.4.bin.WIN64\include;$(MSBuildProjectDirectory)\modules\stb;$(MSBuildProjectDirectory)\modules\imgui-1.91.2\backends;$(MSBuildProjectDirectory)\modules\imgui-1.91.2;$(MSBuildProjectDirectory)\modules\makcu\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildProjectDirectory)\..\vendor\glfw\include;$(MSBuildProjectDirectory)\..\vendor\stb;$(MSBuildProjectDirectory)\..\vendor\opencv\install\include;$(MSBuildProjectDirectory)\..\vendor\serial\include;$(MSBuildProjectDirectory)\..\vendor\simpleini;$(MSBuildProjectDirectory)\..\vendor\gpujpeg;$(MSBuildProjectDirectory)\modules\imgui-1.91.2\backends;$(MSBuildProjectDirectory)\modules\imgui-1.91.2;$(MSBuildProjectDirectory)\modules\makcu\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>
@@ -234,7 +330,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>opencv_world4100.lib;WindowsApp.lib;d3d11.lib;dxgi.lib;d2d1.lib;glfw3_mt.lib;glfw3dll.lib;serial.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(MSBuildProjectDirectory)\modules;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(MSBuildProjectDirectory)\..\vendor\opencv\install\x64\vc17\lib;$(MSBuildProjectDirectory)\modules;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <Manifest>
       <GenerateCatalogFiles>false</GenerateCatalogFiles>

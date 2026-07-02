@@ -12,7 +12,7 @@
 #include <cctype>
 
 #include "config.h"
-#include "modules/SimpleIni.h"
+#include "SimpleIni.h"
 
 std::vector<std::string> Config::splitString(const std::string& str, char delimiter)
 {
@@ -51,7 +51,7 @@ bool Config::loadConfig(const std::string& filename)
         // Capture
         capture_method = "duplication_api";
         detection_resolution = 320;
-        capture_fps = 60;
+        capture_fps = 0;
         monitor_idx = 0;
         circle_mask = true;
         capture_borders = true;
@@ -166,7 +166,7 @@ bool Config::loadConfig(const std::string& filename)
         dml_device_id = 0;
 
 #ifdef USE_CUDA
-        ai_model = "sunxds_0.5.6.engine";
+        ai_model = "apex.engine";
 #else
         ai_model = "sunxds_0.5.6.onnx";
 #endif
@@ -259,6 +259,13 @@ bool Config::loadConfig(const std::string& filename)
         obs_ip = "0.0.0.0";
         obs_port = 4455;
         obs_fps = 240;
+
+        // UDP transport
+        udp_recv_port = 12345;
+        udp_send_ip = "127.0.0.1";
+        udp_send_port = 12345;
+        udp_jpeg_quality = 80;
+        udp_crop_size = 640;
 
         // Custom classes
         class_player = 0;
@@ -432,7 +439,7 @@ bool Config::loadConfig(const std::string& filename)
     if (detection_resolution != 240 && detection_resolution != 320 && detection_resolution != 640)
         detection_resolution = 320;
 
-    capture_fps = get_long("capture_fps", 60);
+    capture_fps = get_long("capture_fps", 0);
     monitor_idx = get_long("monitor_idx", 0);
     circle_mask = get_bool("circle_mask", true);
     capture_borders = get_bool("capture_borders", true);
@@ -658,7 +665,7 @@ bool Config::loadConfig(const std::string& filename)
     dml_device_id = get_long("dml_device_id", 0);
 
 #ifdef USE_CUDA
-    ai_model = get_string("ai_model", "sunxds_0.5.6.engine");
+    ai_model = get_string("ai_model", "apex.engine");
 #else
     ai_model = get_string("ai_model", "sunxds_0.5.6.onnx");
 #endif
@@ -780,6 +787,13 @@ bool Config::loadConfig(const std::string& filename)
     obs_ip = get_string("obs_ip", "0.0.0.0");
     obs_port = get_long("obs_port", 4455);
     obs_fps = get_long("obs_fps", 240);
+
+    // UDP transport
+    udp_recv_port = get_long("udp_recv_port", 12345);
+    udp_send_ip = get_string("udp_send_ip", "127.0.0.1");
+    udp_send_port = get_long("udp_send_port", 12345);
+    udp_jpeg_quality = get_long("udp_jpeg_quality", 80);
+    udp_crop_size = get_long("udp_crop_size", 640);
 
     // Custom Classes
     class_player = get_long("class_player", 0);
@@ -1039,6 +1053,14 @@ bool Config::saveConfig(const std::string& filename)
         << "obs_ip = " << obs_ip << "\n"
         << "obs_port = " << obs_port << "\n"
         << "obs_fps = " << obs_fps << "\n\n";
+
+    // UDP transport
+    file << "# UDP transport\n"
+        << "udp_recv_port = " << udp_recv_port << "\n"
+        << "udp_send_ip = " << udp_send_ip << "\n"
+        << "udp_send_port = " << udp_send_port << "\n"
+        << "udp_jpeg_quality = " << udp_jpeg_quality << "\n"
+        << "udp_crop_size = " << udp_crop_size << "\n\n";
 
     // Color detection
     file << "# Color detection\n";

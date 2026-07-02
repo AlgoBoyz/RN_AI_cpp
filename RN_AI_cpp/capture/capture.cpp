@@ -26,6 +26,7 @@
 #include "capture_utils.h"
 
 #include "color_detector.h"
+#include "udp_frame_receiver.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -87,6 +88,12 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
             }
             if (config.verbose)
                 std::cout << "[Capture] Using Virtual Camera" << std::endl;
+        }
+        else if (config.capture_method == "udp")
+        {
+            capturer = new UdpFrameReceiver(config.udp_recv_port);
+            if (config.verbose)
+                std::cout << "[Capture] Using UDP receiver on port " << config.udp_recv_port << std::endl;
         }
         else
         {
@@ -167,6 +174,12 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
                     }
                     if (config.verbose)
                         std::cout << "[Capture] Re-init with Virtual Camera." << std::endl;
+                }
+                else if (config.capture_method == "udp")
+                {
+                    capturer = new UdpFrameReceiver(config.udp_recv_port);
+                    if (config.verbose)
+                        std::cout << "[Capture] Re-init with UDP receiver on port " << config.udp_recv_port << std::endl;
                 }
                 else
                 {

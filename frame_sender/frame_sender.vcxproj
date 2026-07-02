@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{B1E2F3A4-5C6D-7E8F-9A0B-1C2D3E4F5A6B}</ProjectGuid>
+    <RootNamespace>frame_sender</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(MSBuildProjectDirectory)\..\vendor\opencv\install\include;$(MSBuildProjectDirectory)\..\vendor\gpujpeg;$(MSBuildProjectDirectory)\..\RN_AI_cpp;$(MSBuildProjectDirectory)\..\RN_AI_cpp\config;$(MSBuildProjectDirectory)\..\RN_AI_cpp\capture;$(MSBuildProjectDirectory)\..\RN_AI_cpp\detector;$(MSBuildProjectDirectory)\..\RN_AI_cpp\tensorrt;$(MSBuildProjectDirectory)\..\RN_AI_cpp\mouse;$(MSBuildProjectDirectory)\..\RN_AI_cpp\overlay;$(MSBuildProjectDirectory)\..\RN_AI_cpp\keyboard;$(MSBuildProjectDirectory)\..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\include;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v12.8\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(MSBuildProjectDirectory)\..\vendor\opencv\install\x64\vc17\lib;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v12.8\lib\x64;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>USE_CUDA;GPUJPEG_STATIC;_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>opencv_world4100.lib;ws2_32.lib;d3d11.lib;dxgi.lib;cuda.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <CudaCompile>
+      <CodeGeneration>compute_52,sm_52</CodeGeneration>
+      <AdditionalOptions>-Xcompiler "/Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="..\RN_AI_cpp\capture\duplication_api_capture.cpp" />
+    <ClCompile Include="..\RN_AI_cpp\capture\udp_wire_protocol.cpp" />
+    <ClCompile Include="..\codec\gpu_jpeg_codec.cpp" />
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_decoder.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_encoder.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_common.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_dct_cpu.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_exif.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_huffman_cpu_decoder.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_huffman_cpu_encoder.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_reader.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_table.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_writer.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\utils\image_delegate.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\utils\pam.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\vendor\gpujpeg\src\utils\y4m.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_dct_gpu.cu" />
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_huffman_gpu_decoder.cu" />
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_huffman_gpu_encoder.cu" />
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_postprocessor.cu" />
+    <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_preprocessor.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\RN_AI_cpp\capture\duplication_api_capture.h" />
+    <ClInclude Include="..\RN_AI_cpp\capture\udp_wire_protocol.h" />
+    <ClInclude Include="..\codec\gpu_jpeg_codec.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.targets" />
+  </ImportGroup>
+</Project>
