@@ -266,6 +266,7 @@ bool Config::loadConfig(const std::string& filename)
         udp_send_port = 12345;
         udp_jpeg_quality = 80;
         udp_crop_size = 640;
+        udp_save_frames = false;
 
         // Custom classes
         class_player = 0;
@@ -794,6 +795,7 @@ bool Config::loadConfig(const std::string& filename)
     udp_send_port = get_long("udp_send_port", 12345);
     udp_jpeg_quality = get_long("udp_jpeg_quality", 80);
     udp_crop_size = get_long("udp_crop_size", 640);
+    udp_save_frames = get_bool("udp_save_frames", false);
 
     // Custom Classes
     class_player = get_long("class_player", 0);
@@ -1060,7 +1062,8 @@ bool Config::saveConfig(const std::string& filename)
         << "udp_send_ip = " << udp_send_ip << "\n"
         << "udp_send_port = " << udp_send_port << "\n"
         << "udp_jpeg_quality = " << udp_jpeg_quality << "\n"
-        << "udp_crop_size = " << udp_crop_size << "\n\n";
+        << "udp_crop_size = " << udp_crop_size << "\n"
+        << "udp_save_frames = " << (udp_save_frames ? "true" : "false") << "\n\n";
 
     // Color detection
     file << "# Color detection\n";

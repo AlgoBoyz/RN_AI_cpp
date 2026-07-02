@@ -231,6 +231,28 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
             if (screenshotCpu.empty())
                 continue;
 
+            // Save received UDP frames for debugging (max 1 fps)
+            if (config.capture_method == "udp" && config.udp_save_frames)
+            {
+                static auto last_save = std::chrono::steady_clock::now();
+                auto now = std::chrono::steady_clock::now();
+                if (now - last_save >= std::chrono::seconds(1))
+                {
+                    last_save = now;
+                    char path[MAX_PATH];
+                    const char* user_profile = getenv("USERPROFILE");
+                    if (user_profile)
+                    {
+                        sprintf_s(path, "%s\\rn_ai", user_profile);
+                        CreateDirectoryA(path, nullptr);
+                        auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch()).count();
+                        sprintf_s(path, "%s\\rn_ai\\udp_frame_%lld.jpg", user_profile, ts);
+                        cv::imwrite(path, screenshotCpu);
+                    }
+                }
+            }
+
             if (config.capture_method == "virtual_camera")
             {
                 int x = (screenshotCpu.cols - CAPTURE_WIDTH) / 2;

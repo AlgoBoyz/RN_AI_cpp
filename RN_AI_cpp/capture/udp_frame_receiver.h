@@ -2,7 +2,7 @@
 
 #include "capture.h"
 #include "udp_wire_protocol.h"
-#ifndef _DML_BUILD
+#ifdef USE_CUDA
 #include "../codec/gpu_jpeg_codec.h"
 #endif
 #include <opencv2/opencv.hpp>
@@ -36,10 +36,12 @@ private:
     
     std::mutex frame_mutex_;
     std::condition_variable frame_cv_;
-    std::queue<cv::Mat> frame_queue_;
-    
+    std::queue<std::vector<uint8_t>> compressed_queue_;  // raw JPEG data, no decode
+
+#ifdef USE_CUDA
     std::unique_ptr<GpuJpegCodec> gpu_codec_;
-    
+#endif
+
     static const int MAX_QUEUE_SIZE = 5;
-    static const int FRAGMENT_TIMEOUT_MS = 5;
+    static const int FRAGMENT_TIMEOUT_MS = 200;
 };

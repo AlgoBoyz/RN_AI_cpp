@@ -242,6 +242,7 @@ public:
     int udp_send_port;
     int udp_jpeg_quality;
     int udp_crop_size;
+    bool udp_save_frames;
 
     // Custom Classes
     int class_player;                  // 0

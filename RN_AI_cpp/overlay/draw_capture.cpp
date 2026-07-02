@@ -318,6 +318,14 @@ void draw_capture_settings()
                 capture_method_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::Checkbox("Save received frames", &config.udp_save_frames))
+            {
+                OverlayConfig_MarkDirty();
+            }
+            if (config.udp_save_frames)
+            {
+                ImGui::TextDisabled("Saving to %%USERPROFILE%%\\rn_ai\\");
+            }
         }
         OverlayUI::EndCard();
     }

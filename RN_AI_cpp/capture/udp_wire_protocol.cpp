@@ -76,7 +76,7 @@ void encode_length_prefixed(
     size_t jpeg_size,
     std::vector<uint8_t>& output
 ) {
-    // Calculate total size: 4 (payload_len) + 22 (header) + jpeg_size
+    // Calculate total size: 4 (payload_len) + FRAME_HEADER_SIZE (header) + jpeg_size
     size_t total_size = 4 + FRAME_HEADER_SIZE + jpeg_size;
     output.resize(total_size);
 

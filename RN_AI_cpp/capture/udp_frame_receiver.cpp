@@ -1,5 +1,36 @@
 #include "udp_frame_receiver.h"
 #include <iostream>
+#include <mutex>
+
+// Log file for UDP receive performance
+static FILE* g_udp_log = nullptr;
+static std::once_flag g_udp_log_init;
+
+static void init_udp_log() {
+    const char* profile = getenv("USERPROFILE");
+    if (!profile) return;
+    char path[MAX_PATH];
+    sprintf_s(path, "%s\\rn_ai", profile);
+    CreateDirectoryA(path, nullptr);
+    sprintf_s(path, "%s\\rn_ai\\udp_receiver.csv", profile);
+    fopen_s(&g_udp_log, path, "w");
+    if (g_udp_log) {
+        fprintf(g_udp_log, "time,frame_id,frag_count,assembly_ms,decode_ms,width,height\n");
+        fflush(g_udp_log);
+    }
+}
+
+static void log_frame(uint16_t frame_id, uint8_t frag_count,
+    double assembly_ms, double decode_ms, int w, int h) {
+    if (!g_udp_log) return;
+    auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    struct tm tm_buf;
+    localtime_s(&tm_buf, &now);
+    fprintf(g_udp_log, "%02d:%02d:%02d,%u,%u,%.2f,%.2f,%d,%d\n",
+        tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec,
+        frame_id, frag_count, assembly_ms, decode_ms, w, h);
+    fflush(g_udp_log);
+}
 
 UdpFrameReceiver::UdpFrameReceiver(int port)
     : port_(port), socket_(INVALID_SOCKET), should_stop_(false) {
@@ -32,12 +63,18 @@ UdpFrameReceiver::UdpFrameReceiver(int port)
         WSACleanup();
         return;
     }
-    
+
+    // Set receive timeout so recvfrom unblocks periodically to check should_stop_
+    DWORD timeout_ms = 500;
+    setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout_ms, sizeof(timeout_ms));
+
+#ifdef USE_CUDA
     // Initialize GPU codec
     gpu_codec_ = std::make_unique<GpuJpegCodec>();
     if (!gpu_codec_->initialize()) {
         std::cerr << "[UdpFrameReceiver] Failed to initialize GPU JPEG codec" << std::endl;
     }
+#endif
     
     // Start receive thread
     should_stop_ = false;
@@ -48,27 +85,34 @@ UdpFrameReceiver::UdpFrameReceiver(int port)
 
 UdpFrameReceiver::~UdpFrameReceiver() {
     should_stop_ = true;
-    
-    if (receive_thread_.joinable()) {
-        receive_thread_.join();
-    }
-    
+    frame_cv_.notify_one();  // wake up GetNextFrameCpu
+
+    // Wake up receive thread by closing the socket (recvfrom will return error)
     if (socket_ != INVALID_SOCKET) {
         closesocket(socket_);
         socket_ = INVALID_SOCKET;
     }
-    
+
+    if (receive_thread_.joinable()) {
+        receive_thread_.join();
+    }
+
+#ifdef USE_CUDA
     if (gpu_codec_) {
         gpu_codec_->shutdown();
     }
-    
+#endif
+
     WSACleanup();
 }
 
 void UdpFrameReceiver::ReceiveThread() {
+    std::call_once(g_udp_log_init, init_udp_log);
+
     std::vector<uint8_t> buffer(MAX_DATAGRAM_SIZE);
     std::unique_ptr<FragmentAssembler> current_assembler;
     std::chrono::steady_clock::time_point assembler_start_time;
+    uint16_t current_frame_id = 0;
     
     while (!should_stop_) {
         sockaddr_in from_addr;
@@ -79,15 +123,15 @@ void UdpFrameReceiver::ReceiveThread() {
         
         if (bytes_received == SOCKET_ERROR) {
             int error = WSAGetLastError();
-            if (error == WSAEWOULDBLOCK) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            if (error == WSAEWOULDBLOCK || error == WSAETIMEDOUT) {
                 continue;
-            } else {
-                std::cerr << "[UdpFrameReceiver] Receive error: " << error << std::endl;
-                break;
             }
+            // During shutdown the socket is closed, causing an error - that's expected
+            if (should_stop_) break;
+            std::cerr << "[UdpFrameReceiver] Receive error: " << error << std::endl;
+            break;
         }
-        
+
         if (bytes_received <= 0) {
             continue;
         }
@@ -100,8 +144,12 @@ void UdpFrameReceiver::ReceiveThread() {
         
         // Check if we need a new assembler (frame_id changed)
         if (!current_assembler || current_assembler->frame_id() != frag_info->frame_id) {
+            current_frame_id = frag_info->frame_id;
             current_assembler = std::make_unique<FragmentAssembler>(frag_info->frame_id, frag_info->frag_count);
             assembler_start_time = std::chrono::steady_clock::now();
+            if (g_udp_log) {
+                fprintf(g_udp_log, "ARRIVE,%u,%u,,,\n", frag_info->frame_id, frag_info->frag_count);
+            }
         }
         
         // Check timeout
@@ -119,49 +167,68 @@ void UdpFrameReceiver::ReceiveThread() {
         
         // Check if frame is complete
         if (current_assembler->is_complete()) {
+            auto t_assemble_end = std::chrono::steady_clock::now();
+            double assembly_ms = std::chrono::duration<double, std::milli>(t_assemble_end - assembler_start_time).count();
+            uint8_t frag_count = current_assembler->frag_count();
+
             std::vector<uint8_t> frame_data = current_assembler->assemble();
             current_assembler.reset();
-            
+
             // Decode length-prefixed frame
             auto decoded = decode_length_prefixed(frame_data.data(), frame_data.size());
             if (!decoded) {
+                if (g_udp_log) fprintf(g_udp_log, "FAIL,%u,%u,%.2f,,header_decode_fail\n", current_frame_id, frag_count, assembly_ms);
                 continue;
             }
-            
-            // Decode JPEG
+
+            // Push compressed JPEG to queue (decode later in GetNextFrameCpu)
             std::vector<uint8_t> jpeg_data(decoded->jpeg_data, decoded->jpeg_data + decoded->jpeg_size);
-            cv::Mat frame;
-            
-            if (gpu_codec_ && gpu_codec_->isInitialized()) {
-                frame = gpu_codec_->decode(jpeg_data);
-            } else {
-                frame = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+            {
+                std::lock_guard<std::mutex> lock(frame_mutex_);
+                while (compressed_queue_.size() >= MAX_QUEUE_SIZE) {
+                    compressed_queue_.pop();
+                }
+                compressed_queue_.push(std::move(jpeg_data));
             }
-            
-            if (frame.empty()) {
-                continue;
-            }
-            
-            // Add to frame queue
-            std::lock_guard<std::mutex> lock(frame_mutex_);
-            while (frame_queue_.size() >= MAX_QUEUE_SIZE) {
-                frame_queue_.pop();
-            }
-            frame_queue_.push(frame.clone());
             frame_cv_.notify_one();
+
+            log_frame(current_frame_id, frag_count, assembly_ms, -1.0, decoded->header.width, decoded->header.height);
         }
     }
 }
 
 cv::Mat UdpFrameReceiver::GetNextFrameCpu() {
     std::unique_lock<std::mutex> lock(frame_mutex_);
-    frame_cv_.wait(lock, [this] { return !frame_queue_.empty() || should_stop_; });
-    
-    if (should_stop_ && frame_queue_.empty()) {
+    frame_cv_.wait(lock, [this] { return !compressed_queue_.empty() || should_stop_; });
+
+    if (should_stop_ && compressed_queue_.empty()) {
         return cv::Mat();
     }
-    
-    cv::Mat frame = frame_queue_.front();
-    frame_queue_.pop();
+
+    // Only keep the latest frame, drop stale ones
+    std::vector<uint8_t> jpeg_data;
+    while (!compressed_queue_.empty()) {
+        jpeg_data = std::move(compressed_queue_.front());
+        compressed_queue_.pop();
+    }
+    lock.unlock();
+
+    // Decode JPEG
+    cv::Mat frame;
+#ifdef USE_CUDA
+    try {
+        if (gpu_codec_ && gpu_codec_->isInitialized()) {
+            frame = gpu_codec_->decode(jpeg_data);
+        } else {
+            frame = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[UdpFrameReceiver] GPU decode failed: " << e.what() << ", falling back to CPU" << std::endl;
+        frame = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+    }
+#else
+    frame = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+#endif
+
     return frame;
 }

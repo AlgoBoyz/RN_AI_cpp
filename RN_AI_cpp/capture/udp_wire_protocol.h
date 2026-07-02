@@ -15,7 +15,7 @@ constexpr size_t MAX_FRAGMENTS_PER_FRAME = 255;
 constexpr uint8_t PROTOCOL_VERSION = 1;
 constexpr uint8_t FORMAT_JPEG = 1;
 
-// Frame header structure (22 bytes)
+// Frame header structure (30 bytes)
 struct FrameHeader {
     uint8_t version = PROTOCOL_VERSION;
     uint32_t width = 0;
@@ -32,7 +32,7 @@ struct FrameHeader {
     static std::optional<FrameHeader> decode(const uint8_t* buffer, size_t size);
 };
 
-// Encode frame as length-prefixed format: [4B payload_len][22B header][JPEG data]
+// Encode frame as length-prefixed format: [4B payload_len][FRAME_HEADER_SIZE B header][JPEG data]
 void encode_length_prefixed(
     const FrameHeader& header,
     const uint8_t* jpeg_data,
