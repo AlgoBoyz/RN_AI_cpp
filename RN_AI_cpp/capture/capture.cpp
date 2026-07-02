@@ -119,6 +119,23 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
 
         while (!shouldExit)
         {
+            // Energy saving: when not aiming (right button not held) and not
+            // auto_aim, run capture+inference at a low idle rate (~10 fps)
+            // instead of full speed. Full speed resumes the moment aiming
+            // turns true. Skip the gate entirely while the overlay needs live
+            // frames or auto_aim is on.
+            if (!aiming.load() && !config.auto_aim)
+            {
+                static auto last_idle = std::chrono::steady_clock::now();
+                auto now = std::chrono::steady_clock::now();
+                if (now - last_idle < std::chrono::milliseconds(100))
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    continue;
+                }
+                last_idle = now;
+            }
+
             if (capture_fps_changed.load())
             {
                 if (config.capture_fps > 0.0)

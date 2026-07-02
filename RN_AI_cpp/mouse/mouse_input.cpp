@@ -38,6 +38,15 @@ LRESULT CALLBACK MouseInputGatherer::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
                     s_accum_buttons |= 0x04;
                 if (raw.data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP)
                     s_accum_buttons &= ~0x04;
+                // Side buttons (X1/X2) -> bit 3 / bit 4 (matches MAKCU button_mask_)
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN)
+                    s_accum_buttons |= 0x08;
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP)
+                    s_accum_buttons &= ~0x08;
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN)
+                    s_accum_buttons |= 0x10;
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP)
+                    s_accum_buttons &= ~0x10;
                 // Wheel
                 if (raw.data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
                     s_accum_wheel += (int16_t)raw.data.mouse.usButtonData / WHEEL_DELTA;

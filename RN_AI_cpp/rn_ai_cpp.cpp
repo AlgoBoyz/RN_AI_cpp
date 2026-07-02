@@ -2152,7 +2152,7 @@ void mouseThreadFunction(MouseThread& mouseThread)
         if (!selected) {
             static int no_target_count = 0;
             if (++no_target_count % 100 == 1)
-                printf("[Target] no target selected\n");
+                ALOG("[Target] no target selected");
         }
 
         AimbotTarget* target = nullptr;
@@ -2161,7 +2161,7 @@ void mouseThreadFunction(MouseThread& mouseThread)
             static int target_count = 0;
             target_count++;
             if (target_count % 100 == 1)
-                printf("[Target] selected pivot_x=%.0f pivot_y=%.0f dist=%.0f cls=%d\n",
+                ALOG("[Target] selected pivot_x=%.0f pivot_y=%.0f dist=%.0f cls=%d",
                        selected->pivot_x, selected->pivot_y,
                        selected->distance_to_center, selected->class_id);
             target = new AimbotTarget(
@@ -2212,7 +2212,7 @@ void mouseThreadFunction(MouseThread& mouseThread)
         {
             static int aim_call_count = 0;
             if (++aim_call_count % 100 == 1)
-                printf("[Target] moveMousePivot pivotX=%.0f pivotY=%.0f aiming=%d\n",
+                ALOG("[Target] moveMousePivot pivotX=%.0f pivotY=%.0f aiming=%d",
                        target->pivotX, target->pivotY, (int)aiming.load());
             mouseThread.moveMousePivot(target->pivotX, target->pivotY);
             if (config.auto_shoot)
@@ -2416,20 +2416,21 @@ int main()
         assignInputDevices();
 
         // [DBG] Mouse fusion gatherer init
+        // Always create the gatherer regardless of initial fusion_mode so that
+        // switching modes at runtime (F key) can capture human mouse input.
+        // Mode filtering is handled in moveWorkerLoop (drain only when fusion_mode != 1).
         printf("[DBG] fusion_mode=%d\n", config.fusion_mode);
-        if (config.fusion_mode != 1) {
-            printf("[DBG] Creating MouseInputGatherer...\n");
-            MouseInputGatherer* mouseInput = new MouseInputGatherer();
-            if (mouseInput->start()) {
-                extern MouseInputGatherer* g_mouse_input;
-                g_mouse_input = mouseInput;
-                std::cout << "[MAIN] Mouse input gatherer started" << std::endl;
-            } else {
-                delete mouseInput;
-                std::cout << "[MAIN] FAILED to start mouse input gatherer" << std::endl;
-            }
+        printf("[DBG] Creating MouseInputGatherer...\n");
+        MouseInputGatherer* mouseInput = new MouseInputGatherer();
+        if (mouseInput->start()) {
+            extern MouseInputGatherer* g_mouse_input;
+            g_mouse_input = mouseInput;
+            ALOG("main: mouse_input gatherer started (fusion_mode=%d)", config.fusion_mode);
+            std::cout << "[MAIN] Mouse input gatherer started" << std::endl;
         } else {
-            printf("[DBG] fusion_mode=1, skipping MouseInputGatherer\n");
+            delete mouseInput;
+            ALOG("main: FAILED to start mouse input gatherer");
+            std::cout << "[MAIN] FAILED to start mouse input gatherer" << std::endl;
         }
 
         std::vector<std::string> availableModels = getAvailableModels();

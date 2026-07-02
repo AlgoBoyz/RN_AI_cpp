@@ -142,15 +142,12 @@ void MouseThread::moveWorkerLoop()
 {
     std::cout << "[moveWorker] started" << std::endl;
     ALOG("move_worker: started");
-    uint64_t send_count = 0;
-    int tick_count = 0;
+    uint64_t tick_count = 0;
     while (!workerStop)
     {
         std::unique_lock ul(queueMtx);
         queueCv.wait_for(ul, std::chrono::milliseconds(1), [&] { return workerStop || !moveQueue.empty(); });
         tick_count++;
-        if (tick_count % 1000 == 0)
-            std::cout << "[moveWorker] alive tick=" << tick_count << std::endl;
 
         // Center the cursor in Bridge/Fusion modes so it never hits screen edges
         if (config.fusion_mode != 1 && g_mouse_input) {
@@ -159,56 +156,61 @@ void MouseThread::moveWorkerLoop()
             SetCursorPos(cx, cy);
         }
 
-        // Drain human mouse on every tick, regardless of AI data
-        uint8_t human_buttons = 0;
+        // --- Drain human mouse on every tick (always, to keep accumulator fresh) ---
         int human_dx = 0, human_dy = 0, human_wheel = 0;
+        uint8_t human_buttons = 0;
         if (g_mouse_input) {
-            if (config.fusion_mode == 1) {
-                // Correction mode: skip human input
-                if (tick_count % 1000 == 0)
-                    std::cout << "[mode=1 Correction] skip human" << std::endl;
-            } else {
-                auto raw = g_mouse_input->drain();
-                human_dx = raw.dx; human_dy = raw.dy;
-                human_buttons = raw.buttons; human_wheel = raw.wheel;
-                if (human_dx || human_dy || human_buttons || human_wheel)
-                    std::cout << "[moveWorker] human dx=" << human_dx << " dy=" << human_dy
-                              << " btns=0x" << std::hex << (int)human_buttons << std::dec
-                              << " whl=" << human_wheel << std::endl;
-                if (tick_count % 1000 == 0 && !human_dx && !human_dy && !human_buttons && !human_wheel)
-                    std::cout << "[mode=0/2] drain returned 0" << std::endl;
-            }
-        } else {
-            if (tick_count % 1000 == 0)
-                std::cout << "[moveWorker] g_mouse_input is NULL" << std::endl;
+            auto raw = g_mouse_input->drain();
+            human_dx = raw.dx; human_dy = raw.dy;
+            human_buttons = raw.buttons; human_wheel = raw.wheel;
         }
 
-        // Take only the latest AI entry, discard stale ones
-        int ai_dx = 0, ai_dy = 0;
+        const bool correction = (config.fusion_mode == 1);
+        const char* mn = correction ? "Correction"
+                        : (config.fusion_mode == 2 ? "Fusion" : "Bridge");
+
+        // --- 1) Forward human input FIRST (movement only when not Correction) ---
+        if (correction) {
+            // Pure-AI mode: forward buttons/wheel only, discard human movement
+            if (human_buttons || human_wheel)
+                sendMovementToDriver(0, 0, human_buttons, (int8_t)human_wheel, 0);
+        } else {
+            // Bridge / Fusion: forward full human movement first
+            if (human_dx || human_dy || human_buttons || human_wheel)
+                sendMovementToDriver(human_dx, human_dy, human_buttons, (int8_t)human_wheel, 0);
+        }
+
+        // --- 2) Then forward AI correction steps ONE BY ONE (no dropping) ---
+        //     wind splits a large delta into many small steps; sending each
+        //     preserves the full intended movement instead of keeping only
+        //     the last step. Unlock around the serial write so producers
+        //     (inference thread queueing more steps) are not blocked.
+        int ai_steps = 0, ai_sum_dx = 0, ai_sum_dy = 0;
         while (!moveQueue.empty()) {
             Move m = moveQueue.front();
             moveQueue.pop();
             if (config.fusion_mode == 0) {
-                // Bridge mode: discard AI
-            } else {
-                ai_dx = m.dx; ai_dy = m.dy;
+                // Bridge: discard AI entirely
+                continue;
             }
+            ul.unlock();
+            // Preserve current human button state so an AI correction frame
+            // does not momentarily release a held button (e.g. right-aim).
+            sendMovementToDriver(m.dx, m.dy, human_buttons);
+            ul.lock();
+            ai_steps++;
+            ai_sum_dx += m.dx;
+            ai_sum_dy += m.dy;
         }
         ul.unlock();
 
-        int final_dx = human_dx + ai_dx;
-        int final_dy = human_dy + ai_dy;
-
-        send_count++;
-        if (send_count % 100 == 1 || human_dx || human_dy || ai_dx || ai_dy) {
-            const char* mn = "Bridge";
-            if (config.fusion_mode == 1) mn = "Correction";
-            else if (config.fusion_mode == 2) mn = "Fusion";
-            ALOG("move_worker: ai=(%d,%d) human=(%d,%d) fused=(%d,%d) mode=%s",
-                 ai_dx, ai_dy, human_dx, human_dy, final_dx, final_dy, mn);
+        // Summary log (sampled + on activity)
+        if (tick_count % 100 == 1 ||
+            human_dx || human_dy || human_buttons || human_wheel || ai_steps) {
+            ALOG("move_worker: human=(%d,%d) btns=0x%02X whl=%d ai_steps=%d ai_sum=(%d,%d) mode=%s",
+                 human_dx, human_dy, human_buttons, human_wheel,
+                 ai_steps, ai_sum_dx, ai_sum_dy, mn);
         }
-        if (final_dx || final_dy || human_buttons || human_wheel)
-            sendMovementToDriver(final_dx, final_dy, human_buttons, (int8_t)human_wheel, 0);
     }
     ALOG("move_worker: stopped");
 }
@@ -1099,15 +1101,30 @@ std::pair<int, int> MouseThread::computeMove(
         clearFuturePositions();
     }
 
-    if (use_kalman && use_smoothing)
-        return moveWithKalmanAndSmoothing(predX, predY, fps);
-    if (use_kalman)
-        return moveWithKalman(predX, predY, fps);
-    if (use_smoothing)
-        return moveWithSmoothing(predX, predY, fps);
+    if (use_kalman && use_smoothing) {
+        auto d = moveWithKalmanAndSmoothing(predX, predY, fps);
+        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) branch=kalman+smooth raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
+             targetX, targetY, predX, predY, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
+        return d;
+    }
+    if (use_kalman) {
+        auto d = moveWithKalman(predX, predY, fps);
+        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) branch=kalman raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
+             targetX, targetY, predX, predY, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
+        return d;
+    }
+    if (use_smoothing) {
+        auto d = moveWithSmoothing(predX, predY, fps);
+        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) branch=smooth raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
+             targetX, targetY, predX, predY, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
+        return d;
+    }
 
     auto mv = calc_movement(predX, predY);
-    return { static_cast<int>(std::round(mv.first)), static_cast<int>(std::round(mv.second)) };
+    auto out = std::make_pair(static_cast<int>(std::round(mv.first)), static_cast<int>(std::round(mv.second)));
+    ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) branch=raw raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
+         targetX, targetY, predX, predY, mv.first, mv.second, out.first, out.second, fps, infer_latency_ms);
+    return out;
 }
 
 // Kalman (public wrappers)
@@ -1216,7 +1233,7 @@ void MouseThread::moveMousePivot(double pivotX, double pivotY)
     auto delta = computeMove(pivotX, pivotY, fps, infer_ms, 0.0, 0.0);
     static int move_count = 0;
     if (++move_count % 100 == 1 || delta.first || delta.second)
-        printf("[movePivot] pivot=(%.0f,%.0f) fps=%.0f computeMove=(%d,%d)\n",
+        ALOG("[movePivot] pivot=(%.0f,%.0f) fps=%.0f computeMove=(%d,%d)",
                pivotX, pivotY, fps, delta.first, delta.second);
     if (delta.first || delta.second)
     {

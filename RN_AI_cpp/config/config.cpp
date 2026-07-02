@@ -137,7 +137,7 @@ bool Config::loadConfig(const std::string& filename)
         input_method = "WIN32";
 
         // Wind mouse
-        wind_mouse_enabled = false;
+        wind_mouse_enabled = true;
         fusion_mode = 0;
         wind_G = 18.0f;
         wind_W = 15.0f;
@@ -578,7 +578,7 @@ bool Config::loadConfig(const std::string& filename)
     input_method = get_string("input_method", "WIN32");
 
     // Wind mouse
-    wind_mouse_enabled = get_bool("wind_mouse_enabled", false);
+    wind_mouse_enabled = get_bool("wind_mouse_enabled", true);
     fusion_mode = get_long("fusion_mode", 0);
     wind_G = (float)get_double("wind_G", 18.0f);
     wind_W = (float)get_double("wind_W", 15.0f);
