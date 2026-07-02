@@ -49,7 +49,7 @@ bool Config::loadConfig(const std::string& filename)
         std::cerr << "[Config] Config file does not exist, creating default config: " << filename << std::endl;
 
         // Capture
-        capture_method = "duplication_api";
+        capture_method = "udp";
         detection_resolution = 320;
         capture_fps = 0;
         monitor_idx = 0;
@@ -434,7 +434,7 @@ bool Config::loadConfig(const std::string& filename)
         active_game = game_profiles.begin()->first;
 
     // Capture
-    capture_method = get_string("capture_method", "duplication_api");
+    capture_method = get_string("capture_method", "udp");
     detection_resolution = get_long("detection_resolution", 320);
     if (detection_resolution != 240 && detection_resolution != 320 && detection_resolution != 640)
         detection_resolution = 320;
