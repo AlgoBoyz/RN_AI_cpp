@@ -43,11 +43,12 @@ void draw_capture_settings()
     static char winrt_window_title_buf[128] = "";
     if (OverlayUI::BeginCard("GENERAL CAPTURE SETTINGS", "capture_core_card"))
     {
-        std::vector<std::string> captureMethodOptions = { "duplication_api", "winrt", "virtual_camera", "obs" };
+        std::vector<std::string> captureMethodOptions = { "duplication_api", "winrt", "virtual_camera", "udp", "obs" };
         std::vector<const char*> captureMethodItems;
         captureMethodItems.push_back("duplication_api");
         captureMethodItems.push_back("winrt");
         captureMethodItems.push_back("virtual_camera");
+        captureMethodItems.push_back("udp");
         captureMethodItems.push_back("obs");
 
         int currentcaptureMethodIndex = 0;
@@ -99,7 +100,7 @@ void draw_capture_settings()
             OverlayConfig_MarkDirty();
         }
         if (OverlayUI::g_show_descriptions)
-            ImGui::TextDisabled("duplication_api / winrt / virtual_camera / obs");
+            ImGui::TextDisabled("duplication_api / winrt / virtual_camera / udp / obs");
 
         if (OverlayUI::IntControlRow(
             "Capture FPS",
@@ -295,6 +296,24 @@ void draw_capture_settings()
             }
 
             if (OverlayUI::IntControlRow("Virtual camera heigth", &config.virtual_camera_heigth, 128, 2160, 8, "px"))
+            {
+                capture_method_changed.store(true);
+                OverlayConfig_MarkDirty();
+            }
+        }
+        OverlayUI::EndCard();
+    }
+
+    if (config.capture_method == "udp")
+    {
+        if (OverlayUI::BeginCard("UDP RECEIVER", "capture_udp"))
+        {
+            if (OverlayUI::IntControlRow("Receive port", &config.udp_recv_port, 1024, 65535, 1, ""))
+            {
+                capture_method_changed.store(true);
+                OverlayConfig_MarkDirty();
+            }
+            if (OverlayUI::IntControlRow("JPEG quality", &config.udp_jpeg_quality, 1, 100, 1, ""))
             {
                 capture_method_changed.store(true);
                 OverlayConfig_MarkDirty();
