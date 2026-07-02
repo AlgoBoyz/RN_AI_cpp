@@ -138,12 +138,13 @@ bool Config::loadConfig(const std::string& filename)
 
         // Wind mouse
         wind_mouse_enabled = false;
+        fusion_mode = 0;
         wind_G = 18.0f;
         wind_W = 15.0f;
         wind_M = 10.0f;
         wind_D = 8.0f;
         // Makcu
-        makcu_baudrate = 4000000;
+        makcu_baudrate = 921600;
         makcu_port = "COM1";
 
         // kmbox_B
@@ -199,6 +200,7 @@ bool Config::loadConfig(const std::string& filename)
         button_exit = splitString("F2");
         button_pause = splitString("F3");
         button_reload_config = splitString("F4");
+        button_fusion_mode = splitString("F");
         button_open_overlay = splitString("Home");
         enable_arrows_settings = false;
 
@@ -577,6 +579,7 @@ bool Config::loadConfig(const std::string& filename)
 
     // Wind mouse
     wind_mouse_enabled = get_bool("wind_mouse_enabled", false);
+    fusion_mode = get_long("fusion_mode", 0);
     wind_G = (float)get_double("wind_G", 18.0f);
     wind_W = (float)get_double("wind_W", 15.0f);
     wind_M = (float)get_double("wind_M", 10.0f);
@@ -702,6 +705,7 @@ bool Config::loadConfig(const std::string& filename)
     button_exit = splitString(get_string("button_exit", "F2"));
     button_pause = splitString(get_string("button_pause", "F3"));
     button_reload_config = splitString(get_string("button_reload_config", "F4"));
+    button_fusion_mode = splitString(get_string("button_fusion_mode", "F"));
     button_open_overlay = splitString(get_string("button_open_overlay", "Home"));
     enable_arrows_settings = get_bool("enable_arrows_settings", false);
 
@@ -932,6 +936,7 @@ bool Config::saveConfig(const std::string& filename)
     // Wind mouse
     file << "# Wind mouse\n"
         << "wind_mouse_enabled = " << (wind_mouse_enabled ? "true" : "false") << "\n"
+        << "fusion_mode = " << fusion_mode << "\n"
         << "wind_G = " << wind_G << "\n"
         << "wind_W = " << wind_W << "\n"
         << "wind_M = " << wind_M << "\n"
@@ -993,6 +998,7 @@ bool Config::saveConfig(const std::string& filename)
         << "button_exit = " << joinStrings(button_exit) << "\n"
         << "button_pause = " << joinStrings(button_pause) << "\n"
         << "button_reload_config = " << joinStrings(button_reload_config) << "\n"
+        << "button_fusion_mode = " << joinStrings(button_fusion_mode) << "\n"
         << "button_open_overlay = " << joinStrings(button_open_overlay) << "\n"
         << "enable_arrows_settings = " << (enable_arrows_settings ? "true" : "false") << "\n\n";
 

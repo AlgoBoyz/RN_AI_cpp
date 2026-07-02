@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "MakcuConnection.h"
+#include "async_logger.h"
 #include "config.h"
 #include "rn_ai_cpp.h"
 #ifdef makcu
@@ -73,26 +74,31 @@ MakcuConnection::MakcuConnection(const std::string& port, unsigned int baud_rate
             {
                 if (!device_.setBaudRate(baud_rate, true))
                 {
+                    ALOG("makcu: FAIL set baudrate %u", baud_rate);
                     std::cerr << "[Makcu] Failed to set baud rate to " << baud_rate
                               << ", continuing with current baud rate." << std::endl;
                 }
             }
 
             is_open_ = true;
+            ALOG("makcu: connected port=%s baud=%u", port.c_str(), baud_rate);
             std::cout << "[Makcu] Connected! PORT: " << port << std::endl;
             startSdkPolling();
         }
         else
         {
+            ALOG("makcu: FAIL connect port=%s", port.c_str());
             std::cerr << "[Makcu] Unable to connect to the port: " << port << std::endl;
         }
     }
     catch (const makcu::MakcuException& e)
     {
+        ALOG("makcu: FAIL exception %s", e.what());
         std::cerr << "[Makcu] Error: " << e.what() << std::endl;
     }
     catch (const std::exception& e)
     {
+        ALOG("makcu: FAIL exception %s", e.what());
         std::cerr << "[Makcu] Error: " << e.what() << std::endl;
     }
 }
@@ -127,16 +133,25 @@ std::string MakcuConnection::read()
 
 void MakcuConnection::move(int x, int y)
 {
-    if (!isOpen())
+    if (!isOpen()) {
+        ALOG("makcu: FAIL send dx=%d dy=%d not open", x, y);
         return;
+    }
 
     std::lock_guard<std::mutex> lock(write_mutex_);
     try
     {
         device_.mouseMove(x, y);
+        ALOG("makcu: send dx=%d dy=%d", x, y);
+    }
+    catch (const std::exception& e)
+    {
+        ALOG("makcu: FAIL send dx=%d dy=%d err=%s", x, y, e.what());
+        is_open_ = false;
     }
     catch (...)
     {
+        ALOG("makcu: FAIL send dx=%d dy=%d unknown err", x, y);
         is_open_ = false;
     }
 }
@@ -530,6 +545,11 @@ void MakcuConnection::listeningThreadFunc()
                     //   3 = USB send ok,   4 = USB busy,   5 = USB fail
                     //   6 = XOR error,     7 = UART overrun
                     {
+                        ALOG("makcu: status=0x%02X ok=%d pushed=%d dropped=%d usb_ok=%d busy=%d fail=%d xor_err=%d overrun=%d",
+                             rx_status,
+                             (rx_status & 0x01) != 0, (rx_status & 0x02) != 0, (rx_status & 0x04) != 0,
+                             (rx_status & 0x08) != 0, (rx_status & 0x10) != 0, (rx_status & 0x20) != 0,
+                             (rx_status & 0x40) != 0, (rx_status & 0x80) != 0);
                         static auto lastLog = std::chrono::steady_clock::now();
                         auto now = std::chrono::steady_clock::now();
                         if (now - lastLog >= std::chrono::seconds(1)) {

@@ -105,6 +105,9 @@ public:
     float wind_M;
     float wind_D;
 
+    // Mouse fusion (0=Bridge/仅鼠标, 1=Correction/仅AI, 2=Fusion/两者)
+    int fusion_mode;
+
     // Arduino
     int arduino_baudrate;
     std::string arduino_port;
@@ -162,6 +165,7 @@ public:
     std::vector<std::string> button_exit;
     std::vector<std::string> button_pause;
     std::vector<std::string> button_reload_config;
+    std::vector<std::string> button_fusion_mode;
     std::vector<std::string> button_open_overlay;
     bool enable_arrows_settings;
 

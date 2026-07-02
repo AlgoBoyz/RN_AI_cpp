@@ -9,6 +9,7 @@
 #include <iostream>
 
 #include "config.h"
+#include "async_logger.h"
 #include "SerialConnection.h"
 #include "keyboard_listener.h"
 #include "mouse.h"
@@ -236,6 +237,33 @@ void keyboardListener()
         else
         {
             reloadPressed = false;
+        }
+
+        // Fusion mode toggle: 0=Bridge, 1=Correction, 2=Fusion
+        static bool fusionPressed = false;
+        if (isAnyKeyPressed(config.button_fusion_mode))
+        {
+            if (!fusionPressed)
+            {
+                config.fusion_mode = (config.fusion_mode + 1) % 3;
+                {
+                    const char* mn = "Bridge";
+                    if (config.fusion_mode == 1) mn = "Correction";
+                    else if (config.fusion_mode == 2) mn = "Fusion";
+                    ALOG("fusion: mode=%s", mn);
+                }
+                switch (config.fusion_mode) {
+                    case 0: std::cout << "[Fusion] Bridge mode (mouse only)" << std::endl; break;
+                    case 1: std::cout << "[Fusion] Correction mode (AI only)" << std::endl; break;
+                    case 2: std::cout << "[Fusion] Fusion mode (mouse + AI)" << std::endl; break;
+                }
+                config.saveConfig();
+                fusionPressed = true;
+            }
+        }
+        else
+        {
+            fusionPressed = false;
         }
 
         // Arrow key detection logic using isAnyKeyPressed

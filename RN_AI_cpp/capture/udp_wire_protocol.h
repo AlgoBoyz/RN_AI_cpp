@@ -91,6 +91,7 @@ public:
 
     uint16_t frame_id() const { return m_frame_id; }
     uint8_t frag_count() const { return m_frag_count; }
+    uint8_t received_count() const { return m_received_count; }
 
 private:
     uint16_t m_frame_id;

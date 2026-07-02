@@ -13,7 +13,11 @@
 #include <iostream>
 
 #include "mouse.h"
+#include "mouse_input.h"
+#include "async_logger.h"
 #include "capture.h"
+
+MouseInputGatherer* g_mouse_input = nullptr;
 #include "SerialConnection.h"
 #include "rn_ai_cpp.h"
 #ifdef makcu
@@ -136,28 +140,42 @@ void MouseThread::queueMove(int dx, int dy)
 
 void MouseThread::moveWorkerLoop()
 {
+    ALOG("move_worker: started");
+    uint64_t send_count = 0;
     while (!workerStop)
     {
         std::unique_lock ul(queueMtx);
-        queueCv.wait(ul, [&] { return workerStop || !moveQueue.empty(); });
+        queueCv.wait_for(ul, std::chrono::milliseconds(1), [&] { return workerStop || !moveQueue.empty(); });
 
+        int ai_dx = 0, ai_dy = 0;
         while (!moveQueue.empty())
         {
             Move m = moveQueue.front();
             moveQueue.pop();
+            ai_dx = m.dx; ai_dy = m.dy;
             ul.unlock();
-            {
-                static auto lastLog = std::chrono::steady_clock::now();
-                auto now = std::chrono::steady_clock::now();
-                if (now - lastLog >= std::chrono::seconds(1)) {
-                    lastLog = now;
-                    std::cout << "[Mouse::moveWorkerLoop] dequeued dx=" << m.dx << " dy=" << m.dy << std::endl;
-                }
+
+            int human_dx = 0, human_dy = 0;
+            if (config.fusion_mode == 0) { m.dx = 0; m.dy = 0; }
+            if (g_mouse_input && config.fusion_mode != 1) {
+                auto raw = g_mouse_input->drain();
+                human_dx = raw.dx; human_dy = raw.dy;
+                m.dx += raw.dx; m.dy += raw.dy;
             }
-            sendMovementToDriver(m.dx, m.dy);
+
+            send_count++;
+            if (send_count % 100 == 1) {
+                const char* mn = "Bridge";
+                if (config.fusion_mode == 1) mn = "Correction";
+                else if (config.fusion_mode == 2) mn = "Fusion";
+                ALOG("move_worker: ai=(%d,%d) human=(%d,%d) fused=(%d,%d) mode=%s",
+                     ai_dx, ai_dy, human_dx, human_dy, m.dx, m.dy, mn);
+            }
+            if (m.dx || m.dy) sendMovementToDriver(m.dx, m.dy);
             ul.lock();
         }
     }
+    ALOG("move_worker: stopped");
 }
 
 void MouseThread::windMouseMoveRelative(int dx, int dy)

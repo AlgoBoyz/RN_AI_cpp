@@ -36,6 +36,8 @@
 
 #include "capture.h"
 #include "mouse.h"
+#include "mouse_input.h"
+#include "async_logger.h"
 #include "rn_ai_cpp.h"
 #include "keyboard_listener.h"
 #include "overlay.h"
@@ -2393,6 +2395,22 @@ int main()
 
         globalMouseThread = &mouseThread;
         assignInputDevices();
+
+        // Initialize async logger for mouse fusion
+        AsyncLogger::instance().init();
+
+        // Initialize mouse fusion input gatherer (needed for Bridge=0 and Fusion=2)
+        if (config.fusion_mode != 1) {
+            MouseInputGatherer* mouseInput = new MouseInputGatherer();
+            if (mouseInput->start()) {
+                extern MouseInputGatherer* g_mouse_input;
+                g_mouse_input = mouseInput;
+                std::cout << "[MAIN] Mouse input gatherer started" << std::endl;
+            } else {
+                delete mouseInput;
+                std::cerr << "[MAIN] Failed to start mouse input gatherer" << std::endl;
+            }
+        }
 
         std::vector<std::string> availableModels = getAvailableModels();
 

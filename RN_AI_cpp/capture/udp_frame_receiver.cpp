@@ -67,6 +67,9 @@ UdpFrameReceiver::UdpFrameReceiver(int port)
     // Set receive timeout so recvfrom unblocks periodically to check should_stop_
     DWORD timeout_ms = 500;
     setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout_ms, sizeof(timeout_ms));
+    // Increase receive buffer to hold hundreds of fragments (default 8KB is too small)
+    int rcvbuf = 256 * 1024; // 256KB
+    setsockopt(socket_, SOL_SOCKET, SO_RCVBUF, (const char*)&rcvbuf, sizeof(rcvbuf));
 
 #ifdef USE_CUDA
     // Initialize GPU codec
@@ -144,20 +147,19 @@ void UdpFrameReceiver::ReceiveThread() {
         
         // Check if we need a new assembler (frame_id changed)
         if (!current_assembler || current_assembler->frame_id() != frag_info->frame_id) {
+            if (current_assembler && g_udp_log) {
+                // Log how many fragments the PREVIOUS frame got before being replaced
+                fprintf(g_udp_log, "DISCARD,%u,%u,%u\n",
+                    current_assembler->frame_id(),
+                    current_assembler->frag_count(),
+                    current_assembler->received_count());
+            }
             current_frame_id = frag_info->frame_id;
             current_assembler = std::make_unique<FragmentAssembler>(frag_info->frame_id, frag_info->frag_count);
             assembler_start_time = std::chrono::steady_clock::now();
             if (g_udp_log) {
                 fprintf(g_udp_log, "ARRIVE,%u,%u,,,\n", frag_info->frame_id, frag_info->frag_count);
             }
-        }
-        
-        // Check timeout
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - assembler_start_time).count();
-        if (elapsed > FRAGMENT_TIMEOUT_MS) {
-            current_assembler.reset();
-            continue;
         }
         
         // Add fragment to assembler
