@@ -31,7 +31,7 @@ struct Stats {
 
 int main(int argc, char* argv[]) {
     // Parse command-line arguments
-    std::string host = "127.0.0.1";
+    std::string host = "192.168.137.2";
     int port = 12345;
     int monitor = 0;
     int crop_size = 640;
