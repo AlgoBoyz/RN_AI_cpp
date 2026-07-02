@@ -152,6 +152,13 @@ void MouseThread::moveWorkerLoop()
         if (tick_count % 1000 == 0)
             std::cout << "[moveWorker] alive tick=" << tick_count << std::endl;
 
+        // Center the cursor in Bridge/Fusion modes so it never hits screen edges
+        if (config.fusion_mode != 1 && g_mouse_input) {
+            int cx = GetSystemMetrics(SM_CXSCREEN) / 2;
+            int cy = GetSystemMetrics(SM_CYSCREEN) / 2;
+            SetCursorPos(cx, cy);
+        }
+
         // Drain human mouse on every tick, regardless of AI data
         uint8_t human_buttons = 0;
         int human_dx = 0, human_dy = 0, human_wheel = 0;
@@ -1207,6 +1214,10 @@ void MouseThread::moveMousePivot(double pivotX, double pivotY)
 #endif
 
     auto delta = computeMove(pivotX, pivotY, fps, infer_ms, 0.0, 0.0);
+    static int move_count = 0;
+    if (++move_count % 100 == 1 || delta.first || delta.second)
+        printf("[movePivot] pivot=(%.0f,%.0f) fps=%.0f computeMove=(%d,%d)\n",
+               pivotX, pivotY, fps, delta.first, delta.second);
     if (delta.first || delta.second)
     {
         if (wind_mouse_enabled)

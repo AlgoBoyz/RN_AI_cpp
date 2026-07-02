@@ -18,14 +18,18 @@ public:
 
     bool start();
     void stop();
+    void suspend();   // unregister raw input (restore legacy messages for overlay)
+    void resume();    // re-register with RIDEV_NOLEGACY
     RawMouseAccum drain();
 
 private:
     void threadFunc();
+    bool registerRawInput();
 
     std::atomic<bool> running_{false};
     std::thread thread_;
     HWND hwnd_ = nullptr;
+    bool raw_registered_ = false;
 
     static int s_accum_dx;
     static int s_accum_dy;

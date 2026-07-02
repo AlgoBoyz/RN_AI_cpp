@@ -2149,9 +2149,21 @@ void mouseThreadFunction(MouseThread& mouseThread)
             }
         }
 
+        if (!selected) {
+            static int no_target_count = 0;
+            if (++no_target_count % 100 == 1)
+                printf("[Target] no target selected\n");
+        }
+
         AimbotTarget* target = nullptr;
         if (selected)
         {
+            static int target_count = 0;
+            target_count++;
+            if (target_count % 100 == 1)
+                printf("[Target] selected pivot_x=%.0f pivot_y=%.0f dist=%.0f cls=%d\n",
+                       selected->pivot_x, selected->pivot_y,
+                       selected->distance_to_center, selected->class_id);
             target = new AimbotTarget(
                 selected->box.x,
                 selected->box.y,
@@ -2198,6 +2210,10 @@ void mouseThreadFunction(MouseThread& mouseThread)
 
         if (aiming && target)
         {
+            static int aim_call_count = 0;
+            if (++aim_call_count % 100 == 1)
+                printf("[Target] moveMousePivot pivotX=%.0f pivotY=%.0f aiming=%d\n",
+                       target->pivotX, target->pivotY, (int)aiming.load());
             mouseThread.moveMousePivot(target->pivotX, target->pivotY);
             if (config.auto_shoot)
                 shouldPressAuto = true;
@@ -2398,11 +2414,6 @@ int main()
 
         globalMouseThread = &mouseThread;
         assignInputDevices();
-
-        // [DBG] Async logger init
-        printf("[DBG] Calling AsyncLogger::init()...\n");
-        AsyncLogger::instance().init();
-        printf("[DBG] AsyncLogger::init() done\n");
 
         // [DBG] Mouse fusion gatherer init
         printf("[DBG] fusion_mode=%d\n", config.fusion_mode);

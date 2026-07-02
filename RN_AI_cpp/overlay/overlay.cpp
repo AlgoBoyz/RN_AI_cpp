@@ -24,7 +24,10 @@
 #include "keycodes.h"
 #include "rn_ai_cpp.h"
 #include "capture.h"
+#include "mouse_input.h"
 #include "keyboard_listener.h"
+
+extern MouseInputGatherer* g_mouse_input;
 #include "other_tools.h"
 #include "virtual_camera.h"
 #include "config_dirty.h"
@@ -343,15 +346,24 @@ void OverlayThread()
 
         if (isAnyKeyPressed(config.button_open_overlay) & 0x1)
         {
+            static int saved_fusion_mode = 0;
             show_overlay = !show_overlay;
 
             if (show_overlay)
             {
+                saved_fusion_mode = config.fusion_mode;
+                if (config.fusion_mode != 1) {
+                    config.fusion_mode = 1;
+                    std::cout << "[Overlay] Auto switch to Correction mode (was "
+                              << saved_fusion_mode << ")" << std::endl;
+                }
                 ShowWindow(g_hwnd, SW_SHOW);
                 SetForegroundWindow(g_hwnd);
             }
             else
             {
+                config.fusion_mode = saved_fusion_mode;
+                std::cout << "[Overlay] Restored fusion mode to " << saved_fusion_mode << std::endl;
                 ShowWindow(g_hwnd, SW_HIDE);
             }
 

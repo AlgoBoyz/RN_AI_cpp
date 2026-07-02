@@ -19,6 +19,7 @@ public:
     }
 
     void init() {
+        if (inited_) return;
         const char* p = getenv("USERPROFILE");
         if (!p) { inited_ = false; printf("[AsyncLogger] FAIL no USERPROFILE\n"); return; }
         char path[MAX_PATH];

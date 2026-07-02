@@ -72,20 +72,14 @@ bool MouseInputGatherer::start() {
         SetLayeredWindowAttributes(hwnd_, 0, 0, LWA_ALPHA);
         ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
 
-        RAWINPUTDEVICE rid = {};
-        rid.usUsagePage = 0x01;
-        rid.usUsage = 0x02;
-        rid.dwFlags = RIDEV_INPUTSINK;
-        rid.hwndTarget = hwnd_;
-        if (!RegisterRawInputDevices(&rid, 1, sizeof(rid))) {
-            std::cerr << "[MouseInput] RegisterRawInputDevices failed: " << GetLastError() << std::endl;
-            DestroyWindow(hwnd_);
+        if (!registerRawInput()) {
+            if (hwnd_) DestroyWindow(hwnd_);
             hwnd_ = nullptr;
             return;
         }
 
         ALOG("mouse_input: started ok");
-        std::cout << "[MouseInput] Started" << std::endl;
+        std::cout << "[MouseInput] Started with NOLEGACY" << std::endl;
 
         // Message pump on this thread — dispatches WM_INPUT to WndProc
         MSG msg = {};
@@ -101,6 +95,39 @@ bool MouseInputGatherer::start() {
     // Wait briefly for the window to be created
     Sleep(50);
     return hwnd_ != nullptr;
+}
+
+bool MouseInputGatherer::registerRawInput() {
+    RAWINPUTDEVICE rid = {};
+    rid.usUsagePage = 0x01;
+    rid.usUsage = 0x02;
+    rid.dwFlags = RIDEV_INPUTSINK;
+    rid.hwndTarget = hwnd_;
+    if (!RegisterRawInputDevices(&rid, 1, sizeof(rid))) {
+        std::cerr << "[MouseInput] RegisterRawInputDevices failed: " << GetLastError() << std::endl;
+        return false;
+    }
+    raw_registered_ = true;
+    return true;
+}
+
+void MouseInputGatherer::suspend() {
+    if (raw_registered_) {
+        RAWINPUTDEVICE rid = {};
+        rid.usUsagePage = 0x01;
+        rid.usUsage = 0x02;
+        rid.dwFlags = RIDEV_REMOVE;
+        RegisterRawInputDevices(&rid, 1, sizeof(rid));
+        raw_registered_ = false;
+        std::cout << "[MouseInput] Suspended (raw input unregistered)" << std::endl;
+    }
+}
+
+void MouseInputGatherer::resume() {
+    if (!raw_registered_ && hwnd_) {
+        registerRawInput();
+        std::cout << "[MouseInput] Resumed" << std::endl;
+    }
 }
 
 void MouseInputGatherer::stop() {
