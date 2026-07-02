@@ -153,12 +153,27 @@ void MouseThread::moveWorkerLoop()
             std::cout << "[moveWorker] alive tick=" << tick_count << std::endl;
 
         // Drain human mouse on every tick, regardless of AI data
-        int human_dx = 0, human_dy = 0;
-        if (g_mouse_input && config.fusion_mode != 1) {
-            auto raw = g_mouse_input->drain();
-            human_dx = raw.dx; human_dy = raw.dy;
-            if (human_dx || human_dy)
-                std::cout << "[moveWorker] human dx=" << human_dx << " dy=" << human_dy << std::endl;
+        uint8_t human_buttons = 0;
+        int human_dx = 0, human_dy = 0, human_wheel = 0;
+        if (g_mouse_input) {
+            if (config.fusion_mode == 1) {
+                // Correction mode: skip human input
+                if (tick_count % 1000 == 0)
+                    std::cout << "[mode=1 Correction] skip human" << std::endl;
+            } else {
+                auto raw = g_mouse_input->drain();
+                human_dx = raw.dx; human_dy = raw.dy;
+                human_buttons = raw.buttons; human_wheel = raw.wheel;
+                if (human_dx || human_dy || human_buttons || human_wheel)
+                    std::cout << "[moveWorker] human dx=" << human_dx << " dy=" << human_dy
+                              << " btns=0x" << std::hex << (int)human_buttons << std::dec
+                              << " whl=" << human_wheel << std::endl;
+                if (tick_count % 1000 == 0 && !human_dx && !human_dy && !human_buttons && !human_wheel)
+                    std::cout << "[mode=0/2] drain returned 0" << std::endl;
+            }
+        } else {
+            if (tick_count % 1000 == 0)
+                std::cout << "[moveWorker] g_mouse_input is NULL" << std::endl;
         }
 
         // Take only the latest AI entry, discard stale ones
@@ -166,8 +181,11 @@ void MouseThread::moveWorkerLoop()
         while (!moveQueue.empty()) {
             Move m = moveQueue.front();
             moveQueue.pop();
-            ai_dx = (config.fusion_mode == 0) ? 0 : m.dx;
-            ai_dy = (config.fusion_mode == 0) ? 0 : m.dy;
+            if (config.fusion_mode == 0) {
+                // Bridge mode: discard AI
+            } else {
+                ai_dx = m.dx; ai_dy = m.dy;
+            }
         }
         ul.unlock();
 
@@ -182,7 +200,8 @@ void MouseThread::moveWorkerLoop()
             ALOG("move_worker: ai=(%d,%d) human=(%d,%d) fused=(%d,%d) mode=%s",
                  ai_dx, ai_dy, human_dx, human_dy, final_dx, final_dy, mn);
         }
-        if (final_dx || final_dy) sendMovementToDriver(final_dx, final_dy);
+        if (final_dx || final_dy || human_buttons || human_wheel)
+            sendMovementToDriver(final_dx, final_dy, human_buttons, (int8_t)human_wheel, 0);
     }
     ALOG("move_worker: stopped");
 }
@@ -586,7 +605,7 @@ std::pair<double, double> MouseThread::predict_target_position(double target_x, 
     return { predX, predY };
 }
 
-void MouseThread::sendMovementToDriver(int dx, int dy)
+void MouseThread::sendMovementToDriver(int dx, int dy, uint8_t buttons, int8_t wheel, int8_t hwheel)
 {
     std::lock_guard<std::mutex> lock(input_method_mutex);
     {
@@ -600,12 +619,13 @@ void MouseThread::sendMovementToDriver(int dx, int dy)
             else if (kmbox_net) dev = "KMBOX_NET";
             else if (serial) dev = "SERIAL";
             std::cout << "[Mouse::sendMovementToDriver] dx=" << dx << " dy=" << dy
-                      << " → " << dev << std::endl;
+                      << " btns=0x" << std::hex << (int)buttons << std::dec
+                      << " whl=" << (int)wheel << " → " << dev << std::endl;
         }
     }
     if (makcu)
     {
-        makcu->move(dx, dy);
+        makcu->move(dx, dy, buttons, wheel, hwheel);
     }
     else if (kmbox)
     {

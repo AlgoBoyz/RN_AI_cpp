@@ -52,8 +52,8 @@ private:
     MakcuConnection* makcu;
 
     // ???????? ????????
-    void sendMovementToDriver(int dx, int dy);
-    struct Move { int dx, dy; };
+    void sendMovementToDriver(int dx, int dy, uint8_t buttons = 0, int8_t wheel = 0, int8_t hwheel = 0);
+    struct Move { int dx, dy; uint8_t buttons = 0; int8_t wheel = 0; int8_t hwheel = 0; };
     std::queue<Move>            moveQueue;
     std::mutex                  queueMtx;
     std::condition_variable     queueCv;
@@ -65,7 +65,7 @@ private:
     bool use_smoothing = { false };
     bool use_kalman = { true };
 
-    // ??? «?????»
+    // ??? ï¿½?????ï¿½
     bool   wind_mouse_enabled = true;
     double wind_G, wind_W, wind_M, wind_D;
     void   windMouseMoveRelative(int dx, int dy);
@@ -216,7 +216,7 @@ public:
     void setUseKalman(bool v) { use_kalman = v; }
     bool isUsingKalman() const { return use_kalman; }
 
-    // ????????? «?????????»
+    // ????????? ï¿½?????????ï¿½
     void setSmoothness(int s) { smoothness = (s > 0 ? s : 1); }
     int  getSmoothness() const { return smoothness; }
 

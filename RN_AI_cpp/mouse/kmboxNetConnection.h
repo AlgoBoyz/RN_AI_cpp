@@ -15,7 +15,7 @@ public:
     void monitorThread();
     bool isOpen() const { return is_open_; }
 
-    void move(int x, int y);
+    void move(int x, int y, uint8_t buttons = 0, int8_t wheel = 0, int8_t hwheel = 0);
     void moveAuto(int x, int y, int ms);
     void moveBezier(int x, int y, int ms, int x1, int y1, int x2, int y2);
     void leftDown();

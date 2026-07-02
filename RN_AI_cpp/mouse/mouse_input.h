@@ -1,13 +1,14 @@
 #pragma once
-#include <atomic>
-#include <mutex>
-#include <thread>
 #include <cstdint>
+#include <windows.h>
+#include <atomic>
+#include <thread>
 
 struct RawMouseAccum {
     int dx = 0;
     int dy = 0;
     uint8_t buttons = 0;
+    int wheel = 0;
 };
 
 class MouseInputGatherer {
@@ -20,12 +21,15 @@ public:
     RawMouseAccum drain();
 
 private:
-    void gatherThread();
+    void threadFunc();
 
-    std::atomic<bool> should_stop_{false};
+    std::atomic<bool> running_{false};
     std::thread thread_;
+    HWND hwnd_ = nullptr;
 
-    std::mutex mtx_;
-    RawMouseAccum accum_;
-    bool raw_input_registered_ = false;
+    static int s_accum_dx;
+    static int s_accum_dy;
+    static int s_accum_buttons;
+    static int s_accum_wheel;
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 };

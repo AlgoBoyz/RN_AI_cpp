@@ -26,7 +26,7 @@ public:
     void click();
     void press();
     void release();
-    void move(int x, int y);
+    void move(int x, int y, uint8_t buttons = 0, int8_t wheel = 0, int8_t hwheel = 0);
 
     bool aiming_active;
     bool shooting_active;

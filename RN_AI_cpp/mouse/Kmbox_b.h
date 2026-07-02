@@ -26,7 +26,7 @@ public:
     void click(int button);
     void press(int button);
     void release(int button);
-    void move(int x, int y);
+    void move(int x, int y, uint8_t buttons = 0, int8_t wheel = 0, int8_t hwheel = 0);
 
     void start_boot();
     void reboot();

@@ -104,7 +104,7 @@ std::string KmboxConnection::read()
 
 /* --- ??????? km.* ---------------------------------------------------- */
 
-void KmboxConnection::move(int x, int y)
+void KmboxConnection::move(int x, int y, uint8_t /*buttons*/, int8_t /*wheel*/, int8_t /*hwheel*/)
 {
     if (!is_open_) return;
     write("km.move(" + std::to_string(x) + "," + std::to_string(y) + ")\r\n");

@@ -2399,11 +2399,15 @@ int main()
         globalMouseThread = &mouseThread;
         assignInputDevices();
 
-        // Initialize async logger for mouse fusion
+        // [DBG] Async logger init
+        printf("[DBG] Calling AsyncLogger::init()...\n");
         AsyncLogger::instance().init();
+        printf("[DBG] AsyncLogger::init() done\n");
 
-        // Initialize mouse fusion input gatherer (needed for Bridge=0 and Fusion=2)
+        // [DBG] Mouse fusion gatherer init
+        printf("[DBG] fusion_mode=%d\n", config.fusion_mode);
         if (config.fusion_mode != 1) {
+            printf("[DBG] Creating MouseInputGatherer...\n");
             MouseInputGatherer* mouseInput = new MouseInputGatherer();
             if (mouseInput->start()) {
                 extern MouseInputGatherer* g_mouse_input;
@@ -2411,8 +2415,10 @@ int main()
                 std::cout << "[MAIN] Mouse input gatherer started" << std::endl;
             } else {
                 delete mouseInput;
-                std::cerr << "[MAIN] Failed to start mouse input gatherer" << std::endl;
+                std::cout << "[MAIN] FAILED to start mouse input gatherer" << std::endl;
             }
+        } else {
+            printf("[DBG] fusion_mode=1, skipping MouseInputGatherer\n");
         }
 
         std::vector<std::string> availableModels = getAvailableModels();

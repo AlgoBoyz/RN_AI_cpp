@@ -110,7 +110,7 @@ void SerialConnection::release()
     sendCommand("r");
 }
 
-void SerialConnection::move(int x, int y)
+void SerialConnection::move(int x, int y, uint8_t /*buttons*/, int8_t /*wheel*/, int8_t /*hwheel*/)
 {
     if (!is_open_)
         return;

@@ -2,130 +2,123 @@
 #define NOMINMAX
 #include <Windows.h>
 #include <iostream>
-#include <vector>
 #include "mouse_input.h"
 #include "async_logger.h"
 
-// RAWINPUTHEADER is 24 bytes on x64, but GetRawInputBuffer uses
-// sizeof(RAWINPUTHEADER) for stride — keep this aligned.
-#define RAW_HDR_SIZE sizeof(RAWINPUTHEADER)
+int MouseInputGatherer::s_accum_dx = 0;
+int MouseInputGatherer::s_accum_dy = 0;
+int MouseInputGatherer::s_accum_buttons = 0;
+int MouseInputGatherer::s_accum_wheel = 0;
 
 MouseInputGatherer::MouseInputGatherer() = default;
 MouseInputGatherer::~MouseInputGatherer() { stop(); }
 
+LRESULT CALLBACK MouseInputGatherer::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_INPUT) {
+        RAWINPUT raw = {};
+        HRAWINPUT hri = (HRAWINPUT)lp;
+        UINT sz = sizeof(raw);
+        if (GetRawInputData(hri, RID_INPUT, &raw, &sz, sizeof(RAWINPUTHEADER)) == sz) {
+            if (raw.header.dwType == RIM_TYPEMOUSE) {
+                // Relative movement
+                if (!(raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)) {
+                    s_accum_dx += raw.data.mouse.lLastX;
+                    s_accum_dy += raw.data.mouse.lLastY;
+                }
+                // Buttons
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN)
+                    s_accum_buttons |= 0x01;
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP)
+                    s_accum_buttons &= ~0x01;
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN)
+                    s_accum_buttons |= 0x02;
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP)
+                    s_accum_buttons &= ~0x02;
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN)
+                    s_accum_buttons |= 0x04;
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP)
+                    s_accum_buttons &= ~0x04;
+                // Wheel
+                if (raw.data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
+                    s_accum_wheel += (int16_t)raw.data.mouse.usButtonData / WHEEL_DELTA;
+            }
+        }
+        return 0;
+    }
+    return DefWindowProcA(hwnd, msg, wp, lp);
+}
+
 bool MouseInputGatherer::start() {
-    HINSTANCE hinst = GetModuleHandleA(nullptr);
+    running_ = true;
+    thread_ = std::thread([this]() {
+        HINSTANCE hinst = GetModuleHandleA(nullptr);
 
-    // Register a simple message-only window class
-    WNDCLASSEXA wc = {};
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = [](HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) -> LRESULT {
-        return DefWindowProcA(hwnd, msg, wp, lp);
-    };
-    wc.hInstance = hinst;
-    wc.lpszClassName = "RN_MouseInput_Window";
-    RegisterClassExA(&wc);
+        WNDCLASSEXA wc = {};
+        wc.cbSize = sizeof(wc);
+        wc.lpfnWndProc = WndProc;
+        wc.hInstance = hinst;
+        wc.lpszClassName = "RN_MouseInput_Window";
+        RegisterClassExA(&wc);
 
-    HWND hwnd = CreateWindowExA(0, wc.lpszClassName, "", 0, 0, 0, 0, 0,
-                                HWND_MESSAGE, nullptr, hinst, nullptr);
-    if (!hwnd) {
-        ALOG("mouse_input: FAIL create message window");
-        std::cerr << "[MouseInput] Failed to create message window" << std::endl;
-        return false;
-    }
+        hwnd_ = CreateWindowExA(
+            WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+            wc.lpszClassName, "", WS_POPUP,
+            0, 0, 1, 1, nullptr, nullptr, hinst, nullptr);
+        if (!hwnd_) {
+            std::cerr << "[MouseInput] CreateWindow failed: " << GetLastError() << std::endl;
+            return;
+        }
 
-    // Register raw mouse input (RIDEV_INPUTSINK to capture even when not foreground)
-    RAWINPUTDEVICE rid = {};
-    rid.usUsagePage = 0x01;
-    rid.usUsage = 0x02;
-    rid.dwFlags = RIDEV_INPUTSINK;
-    rid.hwndTarget = hwnd;
-    if (!RegisterRawInputDevices(&rid, 1, sizeof(rid))) {
-        ALOG("mouse_input: FAIL register raw input err=%lu", GetLastError());
-        std::cerr << "[MouseInput] Failed to register raw input: " << GetLastError() << std::endl;
-        DestroyWindow(hwnd);
-        return false;
-    }
-    raw_input_registered_ = true;
+        SetLayeredWindowAttributes(hwnd_, 0, 0, LWA_ALPHA);
+        ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
 
-    ALOG("mouse_input: started ok");
-    std::cout << "[MouseInput] Started" << std::endl;
+        RAWINPUTDEVICE rid = {};
+        rid.usUsagePage = 0x01;
+        rid.usUsage = 0x02;
+        rid.dwFlags = RIDEV_INPUTSINK;
+        rid.hwndTarget = hwnd_;
+        if (!RegisterRawInputDevices(&rid, 1, sizeof(rid))) {
+            std::cerr << "[MouseInput] RegisterRawInputDevices failed: " << GetLastError() << std::endl;
+            DestroyWindow(hwnd_);
+            hwnd_ = nullptr;
+            return;
+        }
 
-    // Buffer for GetRawInputBuffer (4 KB initial, grows if needed)
-    std::vector<uint8_t> raw_buf(4096);
+        ALOG("mouse_input: started ok");
+        std::cout << "[MouseInput] Started" << std::endl;
 
-    should_stop_ = false;
-    thread_ = std::thread([this, hwnd, raw_buf{std::move(raw_buf)}]() mutable {
+        // Message pump on this thread — dispatches WM_INPUT to WndProc
         MSG msg = {};
-
-        while (!should_stop_.load()) {
-            // 1. Dispatch all messages EXCEPT WM_INPUT (which GetRawInputBuffer consumes)
-            while (PeekMessageA(&msg, nullptr, 0, WM_INPUT - 1, PM_REMOVE) ||
-                   PeekMessageA(&msg, nullptr, WM_INPUT + 1, UINT_MAX, PM_REMOVE)) {
-                TranslateMessage(&msg);
-                DispatchMessageA(&msg);
-                if (msg.message == WM_QUIT) break;
-            }
-
-            // 2. Batch-read raw input
-            UINT cb_size = (UINT)raw_buf.size();
-            UINT count = GetRawInputBuffer((PRAWINPUT)raw_buf.data(), &cb_size, RAW_HDR_SIZE);
-
-            if (count == 0) {
-                // Buffer might be too small — cb_size now holds required size
-                if (cb_size > raw_buf.size()) {
-                    raw_buf.resize(cb_size);
-                }
-            } else if (count != UINT_MAX) {
-                // 3. Process all raw input events
-                std::lock_guard<std::mutex> lock(mtx_);
-                PRAWINPUT raw_iter = (PRAWINPUT)raw_buf.data();
-                for (UINT i = 0; i < count; i++) {
-                    if (raw_iter->header.dwType == RIM_TYPEMOUSE) {
-                        if (!(raw_iter->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)) {
-                            accum_.dx += raw_iter->data.mouse.lLastX;
-                            accum_.dy += raw_iter->data.mouse.lLastY;
-                        }
-                    }
-                    // Advance to next RAWINPUT block (manual NEXTRAWINPUTBLOCK)
-                    raw_iter = (PRAWINPUT)((PBYTE)raw_iter + raw_iter->header.dwSize);
-                }
-
-                // 4. Tell the system we consumed the data
-                PRAWINPUT raw_ptr = (PRAWINPUT)raw_buf.data();
-                DefRawInputProc(&raw_ptr, (int)count, RAW_HDR_SIZE);
-            }
-
-            // 5. Wait efficiently for next input (100 ms timeout as stop-check fallback)
-            MsgWaitForMultipleObjectsEx(0, nullptr, 100, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        while (running_ && GetMessageA(&msg, nullptr, 0, 0)) {
+            TranslateMessage(&msg);
+            DispatchMessageA(&msg);
         }
 
-        if (raw_input_registered_) {
-            DestroyWindow(hwnd);
-        }
+        if (hwnd_) DestroyWindow(hwnd_);
+        hwnd_ = nullptr;
     });
 
-    return true;
+    // Wait briefly for the window to be created
+    Sleep(50);
+    return hwnd_ != nullptr;
 }
 
 void MouseInputGatherer::stop() {
-    should_stop_ = true;
-    if (thread_.joinable()) {
-        thread_.join();
-    }
+    running_ = false;
+    if (hwnd_) PostMessageA(hwnd_, WM_QUIT, 0, 0);
+    if (thread_.joinable()) thread_.join();
 }
 
 RawMouseAccum MouseInputGatherer::drain() {
     RawMouseAccum result;
-    {
-        std::lock_guard<std::mutex> lock(mtx_);
-        result.dx = accum_.dx;
-        result.dy = accum_.dy;
-        result.buttons = accum_.buttons;
-        accum_.dx = 0;
-        accum_.dy = 0;
-        accum_.buttons = 0;
-    }
-    if (result.dx || result.dy) ALOG("mouse_input: dx=%d dy=%d", result.dx, result.dy);
+    result.dx = s_accum_dx;
+    result.dy = s_accum_dy;
+    result.buttons = (uint8_t)s_accum_buttons;
+    result.wheel = s_accum_wheel;
+    s_accum_dx = 0;
+    s_accum_dy = 0;
+    s_accum_wheel = 0;
+    if (result.dx || result.dy || result.wheel)
+        ALOG("mouse_input: dx=%d dy=%d buttons=0x%02X wheel=%d", result.dx, result.dy, result.buttons, result.wheel);
     return result;
 }

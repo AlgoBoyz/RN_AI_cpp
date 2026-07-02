@@ -131,7 +131,7 @@ std::string MakcuConnection::read()
     return std::string();
 }
 
-void MakcuConnection::move(int x, int y)
+void MakcuConnection::move(int x, int y, uint8_t buttons, int8_t wheel, int8_t hwheel)
 {
     if (!isOpen()) {
         ALOG("makcu: FAIL send dx=%d dy=%d not open", x, y);
@@ -142,7 +142,7 @@ void MakcuConnection::move(int x, int y)
     try
     {
         device_.mouseMove(x, y);
-        ALOG("makcu: send dx=%d dy=%d", x, y);
+        ALOG("makcu: send dx=%d dy=%d btns=0x%02X whl=%d", x, y, buttons, wheel);
     }
     catch (const std::exception& e)
     {
@@ -459,17 +459,19 @@ void MakcuConnection::sendMouseFrame(int16_t dx, int16_t dy,
 }
 
 /* ── High-level mouse operations ──────────────────────────────────── */
-void MakcuConnection::move(int x, int y)
+void MakcuConnection::move(int x, int y, uint8_t buttons, int8_t wheel, int8_t hwheel)
 {
+    uint8_t merged_btns = buttons | button_mask_;
     {
         static auto lastLog = std::chrono::steady_clock::now();
         auto now = std::chrono::steady_clock::now();
         if (now - lastLog >= std::chrono::seconds(1)) {
             lastLog = now;
-            printf("[Makcu::move] dx=%d dy=%d button_mask=0x%02X\n", x, y, button_mask_);
+            printf("[Makcu::move] dx=%d dy=%d btn_gui=0x%02X btn_human=0x%02X whl=%d\n",
+                   x, y, button_mask_, buttons, wheel);
         }
     }
-    sendMouseFrame(static_cast<int16_t>(x), static_cast<int16_t>(y), button_mask_);
+    sendMouseFrame(static_cast<int16_t>(x), static_cast<int16_t>(y), merged_btns, wheel, hwheel);
 }
 
 void MakcuConnection::press(int button)

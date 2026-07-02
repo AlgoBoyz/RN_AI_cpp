@@ -44,7 +44,7 @@ KmboxNetConnection::~KmboxNetConnection()
     WSACleanup();
 }
 
-void KmboxNetConnection::move(int x, int y)
+void KmboxNetConnection::move(int x, int y, uint8_t /*buttons*/, int8_t /*wheel*/, int8_t /*hwheel*/)
 {
     if (!is_open_) return;
     kmNet_mouse_move((short)x, (short)y);
