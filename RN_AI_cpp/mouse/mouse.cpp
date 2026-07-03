@@ -143,18 +143,17 @@ void MouseThread::moveWorkerLoop()
     std::cout << "[moveWorker] started" << std::endl;
     ALOG("move_worker: started");
     uint64_t tick_count = 0;
+    auto last_center_time = std::chrono::steady_clock::now();
+    // Per-second passthrough accounting
+    int cap_human_dx = 0, cap_human_dy = 0;
+    int fwd_human_dx = 0, fwd_human_dy = 0;
+    int fwd_ai_dx = 0, fwd_ai_dy = 0;
+    auto last_stat_time = std::chrono::steady_clock::now();
     while (!workerStop)
     {
         std::unique_lock ul(queueMtx);
         queueCv.wait_for(ul, std::chrono::milliseconds(1), [&] { return workerStop || !moveQueue.empty(); });
         tick_count++;
-
-        // Center the cursor in Bridge/Fusion modes so it never hits screen edges
-        if (config.fusion_mode != 1 && g_mouse_input) {
-            int cx = GetSystemMetrics(SM_CXSCREEN) / 2;
-            int cy = GetSystemMetrics(SM_CYSCREEN) / 2;
-            SetCursorPos(cx, cy);
-        }
 
         // --- Drain human mouse on every tick (always, to keep accumulator fresh) ---
         int human_dx = 0, human_dy = 0, human_wheel = 0;
@@ -165,19 +164,53 @@ void MouseThread::moveWorkerLoop()
             human_buttons = raw.buttons; human_wheel = raw.wheel;
         }
 
+        // Drive `aiming` from the physical right-button state captured via
+        // RawInput. GetAsyncKeyState cannot see the button once the mouse is
+        // forwarded to hardware, so the idle capture throttle and target
+        // selection must key off this instead.
+        const bool right_held = (human_buttons & 0x02) != 0;
+        if (right_held != aiming.load())
+            aiming.store(right_held);
+
+        // Center the cursor occasionally so it never hits screen edges, but
+        // only when not actively aiming and at most ~5 Hz. Re-centering every
+        // tick (1 kHz) was a heavy system call and the main worker bottleneck.
+        if (config.fusion_mode != 1 && !right_held) {
+            auto now = std::chrono::steady_clock::now();
+            if (now - last_center_time >= std::chrono::milliseconds(200)) {
+                last_center_time = now;
+                POINT p{};
+                if (GetCursorPos(&p)) {
+                    int cx = GetSystemMetrics(SM_CXSCREEN) / 2;
+                    int cy = GetSystemMetrics(SM_CYSCREEN) / 2;
+                    if (std::abs(p.x - cx) > 200 || std::abs(p.y - cy) > 200)
+                        SetCursorPos(cx, cy);
+                }
+            }
+        }
+
         const bool correction = (config.fusion_mode == 1);
         const char* mn = correction ? "Correction"
                         : (config.fusion_mode == 2 ? "Fusion" : "Bridge");
 
         // --- 1) Forward human input FIRST (movement only when not Correction) ---
+        //     Apply human mouse sensitivity multiplier to dx/dy. Sub-pixel
+        //     remainder is accumulated in human_overflow_* and carried to the
+        //     next tick so low sensitivities do not silently drop movement.
+        int fwd_dx = 0, fwd_dy = 0;
         if (correction) {
             // Pure-AI mode: forward buttons/wheel only, discard human movement
             if (human_buttons || human_wheel)
                 sendMovementToDriver(0, 0, human_buttons, (int8_t)human_wheel, 0);
         } else {
             // Bridge / Fusion: forward full human movement first
-            if (human_dx || human_dy || human_buttons || human_wheel)
-                sendMovementToDriver(human_dx, human_dy, human_buttons, (int8_t)human_wheel, 0);
+            double hsens = config.human_mouse_sensitivity;
+            auto fwd = addOverflow(human_dx * hsens, human_dy * hsens,
+                                   human_overflow_x, human_overflow_y);
+            fwd_dx = static_cast<int>(fwd.first);
+            fwd_dy = static_cast<int>(fwd.second);
+            if (fwd_dx || fwd_dy || human_buttons || human_wheel)
+                sendMovementToDriver(fwd_dx, fwd_dy, human_buttons, (int8_t)human_wheel, 0);
         }
 
         // --- 2) Then forward AI correction steps ONE BY ONE (no dropping) ---
@@ -210,6 +243,24 @@ void MouseThread::moveWorkerLoop()
             ALOG("move_worker: human=(%d,%d) btns=0x%02X whl=%d ai_steps=%d ai_sum=(%d,%d) mode=%s",
                  human_dx, human_dy, human_buttons, human_wheel,
                  ai_steps, ai_sum_dx, ai_sum_dy, mn);
+        }
+
+        // Per-second accounting: captured human total vs actually-forwarded
+        // total vs AI total. Exposes any divergence between what RawInput
+        // captured and what reached the hardware (sens scaling, overflow,
+        // dropped sends).
+        cap_human_dx += human_dx; cap_human_dy += human_dy;
+        fwd_human_dx += fwd_dx;   fwd_human_dy += fwd_dy;
+        fwd_ai_dx += ai_sum_dx;   fwd_ai_dy += ai_sum_dy;
+        auto now_stat = std::chrono::steady_clock::now();
+        if (now_stat - last_stat_time >= std::chrono::seconds(1)) {
+            ALOG("passthrough_stat: captured=(%d,%d) forwarded_human=(%d,%d) forwarded_ai=(%d,%d) sens=%.3f mode=%s",
+                 cap_human_dx, cap_human_dy, fwd_human_dx, fwd_human_dy,
+                 fwd_ai_dx, fwd_ai_dy, config.human_mouse_sensitivity, mn);
+            cap_human_dx = cap_human_dy = 0;
+            fwd_human_dx = fwd_human_dy = 0;
+            fwd_ai_dx = fwd_ai_dy = 0;
+            last_stat_time = now_stat;
         }
     }
     ALOG("move_worker: stopped");
@@ -617,21 +668,6 @@ std::pair<double, double> MouseThread::predict_target_position(double target_x, 
 void MouseThread::sendMovementToDriver(int dx, int dy, uint8_t buttons, int8_t wheel, int8_t hwheel)
 {
     std::lock_guard<std::mutex> lock(input_method_mutex);
-    {
-        static auto lastLog = std::chrono::steady_clock::now();
-        auto now = std::chrono::steady_clock::now();
-        if (now - lastLog >= std::chrono::seconds(1)) {
-            lastLog = now;
-            const char* dev = "NONE(dropped)";
-            if (makcu) dev = "MAKCU";
-            else if (kmbox) dev = "KMBOX_B";
-            else if (kmbox_net) dev = "KMBOX_NET";
-            else if (serial) dev = "SERIAL";
-            std::cout << "[Mouse::sendMovementToDriver] dx=" << dx << " dy=" << dy
-                      << " btns=0x" << std::hex << (int)buttons << std::dec
-                      << " whl=" << (int)wheel << " → " << dev << std::endl;
-        }
-    }
     if (makcu)
     {
         makcu->move(dx, dy, buttons, wheel, hwheel);

@@ -139,12 +139,13 @@ bool Config::loadConfig(const std::string& filename)
         // Wind mouse
         wind_mouse_enabled = true;
         fusion_mode = 0;
+        human_mouse_sensitivity = 1.0f;
         wind_G = 18.0f;
         wind_W = 15.0f;
         wind_M = 10.0f;
         wind_D = 8.0f;
         // Makcu
-        makcu_baudrate = 921600;
+        makcu_baudrate = 115200;
         makcu_port = "COM1";
 
         // kmbox_B
@@ -580,12 +581,13 @@ bool Config::loadConfig(const std::string& filename)
     // Wind mouse
     wind_mouse_enabled = get_bool("wind_mouse_enabled", true);
     fusion_mode = get_long("fusion_mode", 0);
+    human_mouse_sensitivity = (float)get_double("human_mouse_sensitivity", 1.0);
     wind_G = (float)get_double("wind_G", 18.0f);
     wind_W = (float)get_double("wind_W", 15.0f);
     wind_M = (float)get_double("wind_M", 10.0f);
     wind_D = (float)get_double("wind_D", 8.0f);
     // Makcu
-    makcu_baudrate = get_long("makcu_baudrate", 4000000);
+    makcu_baudrate = get_long("makcu_baudrate", 115200);
     makcu_port = get_string("makcu_port", "COM1");
     if (makcu_port.empty() || makcu_port == "COM0")
         makcu_port = "COM1";
@@ -937,6 +939,7 @@ bool Config::saveConfig(const std::string& filename)
     file << "# Wind mouse\n"
         << "wind_mouse_enabled = " << (wind_mouse_enabled ? "true" : "false") << "\n"
         << "fusion_mode = " << fusion_mode << "\n"
+        << "human_mouse_sensitivity = " << human_mouse_sensitivity << "\n"
         << "wind_G = " << wind_G << "\n"
         << "wind_W = " << wind_W << "\n"
         << "wind_M = " << wind_M << "\n"

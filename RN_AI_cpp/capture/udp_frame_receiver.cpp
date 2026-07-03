@@ -15,20 +15,22 @@ static void init_udp_log() {
     sprintf_s(path, "%s\\rn_ai\\udp_receiver.csv", profile);
     fopen_s(&g_udp_log, path, "w");
     if (g_udp_log) {
-        fprintf(g_udp_log, "time,frame_id,frag_count,assembly_ms,decode_ms,width,height\n");
+        fprintf(g_udp_log, "time,frame_id,frag_count,assembly_ms,decode_ms,width,height,capture_ts_ms,frame_seq\n");
         fflush(g_udp_log);
     }
 }
 
 static void log_frame(uint16_t frame_id, uint8_t frag_count,
-    double assembly_ms, double decode_ms, int w, int h) {
+    double assembly_ms, double decode_ms, int w, int h,
+    uint64_t capture_ts_ms, uint64_t frame_seq) {
     if (!g_udp_log) return;
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     struct tm tm_buf;
     localtime_s(&tm_buf, &now);
-    fprintf(g_udp_log, "%02d:%02d:%02d,%u,%u,%.2f,%.2f,%d,%d\n",
+    fprintf(g_udp_log, "%02d:%02d:%02d,%u,%u,%.2f,%.2f,%d,%d,%llu,%llu\n",
         tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec,
-        frame_id, frag_count, assembly_ms, decode_ms, w, h);
+        frame_id, frag_count, assembly_ms, decode_ms, w, h,
+        (unsigned long long)capture_ts_ms, (unsigned long long)frame_seq);
     fflush(g_udp_log);
 }
 
@@ -194,7 +196,8 @@ void UdpFrameReceiver::ReceiveThread() {
             }
             frame_cv_.notify_one();
 
-            log_frame(current_frame_id, frag_count, assembly_ms, -1.0, decoded->header.width, decoded->header.height);
+            log_frame(current_frame_id, frag_count, assembly_ms, -1.0, decoded->header.width, decoded->header.height,
+                      decoded->header.capture_timestamp_ms, decoded->header.frame_seq);
         }
     }
 }

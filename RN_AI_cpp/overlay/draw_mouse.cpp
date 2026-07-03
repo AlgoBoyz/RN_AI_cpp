@@ -170,7 +170,7 @@ static void draw_smoothing_kalman_demo_canvas()
     static double smX = center.x, smY = center.y;
     int   N = config.smoothness > 0 ? config.smoothness : 1;
     double alpha = 1.0 / N;
-    // ?????, ???? Kalman-?????????? «???????» ??????? ??????
+    // ?????, ???? Kalman-?????????? ï¿½???????ï¿½ ??????? ??????
     const double resetThreshold = 5.0;
     if (hypot(kalX - smX, kalY - smY) > resetThreshold) {
         smX = kalX;
@@ -198,6 +198,10 @@ void draw_mouse()
     ImGui::SeparatorText("FOV");
     ImGui::SliderInt("FOV X", &config.fovX, 10, 120);
     ImGui::SliderInt("FOV Y", &config.fovY, 10, 120);
+
+    ImGui::SeparatorText("Mouse Passthrough");
+    if (ImGui::SliderFloat("Human Mouse Sensitivity", &config.human_mouse_sensitivity, 0.0f, 1.5f, "%.2f"))
+        config.saveConfig();
 
     ImGui::SliderInt("Smoothness", &config.smoothness, 1, 200, "%d");
     if (ImGui::Checkbox("Enable Smooth Movement", &config.use_smoothing))

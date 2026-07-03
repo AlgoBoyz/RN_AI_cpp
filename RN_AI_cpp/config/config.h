@@ -107,6 +107,9 @@ public:
 
     // Mouse fusion (0=Bridge/仅鼠标, 1=Correction/仅AI, 2=Fusion/两者)
     int fusion_mode;
+    // Sensitivity multiplier applied to passthrough human mouse movement
+    // (dx/dy) before forwarding to hardware. Range 0.0 - 1.5.
+    float human_mouse_sensitivity;
 
     // Arduino
     int arduino_baudrate;

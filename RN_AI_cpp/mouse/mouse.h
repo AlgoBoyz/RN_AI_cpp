@@ -84,6 +84,9 @@ private:
     // ????????? ??? ???????????
     int    smoothness{ 100 };
     double move_overflow_x{ 0.0 }, move_overflow_y{ 0.0 };
+    // Overflow accumulators for human-mouse passthrough sensitivity scaling
+    // (kept separate from move_overflow_* which belongs to the smoothing path).
+    double human_overflow_x{ 0.0 }, human_overflow_y{ 0.0 };
 
     double easeInOut(double t);
     std::pair<double, double> addOverflow(double dx, double dy,

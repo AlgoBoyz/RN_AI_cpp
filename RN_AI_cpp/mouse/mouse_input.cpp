@@ -2,19 +2,27 @@
 #define NOMINMAX
 #include <Windows.h>
 #include <iostream>
+#include <atomic>
+#include <chrono>
 #include "mouse_input.h"
 #include "async_logger.h"
 
-int MouseInputGatherer::s_accum_dx = 0;
-int MouseInputGatherer::s_accum_dy = 0;
-int MouseInputGatherer::s_accum_buttons = 0;
-int MouseInputGatherer::s_accum_wheel = 0;
+std::atomic<int> MouseInputGatherer::s_accum_dx{0};
+std::atomic<int> MouseInputGatherer::s_accum_dy{0};
+std::atomic<int> MouseInputGatherer::s_accum_buttons{0};
+std::atomic<int> MouseInputGatherer::s_accum_wheel{0};
+
+// Raw WM_INPUT event counter for diagnosing capture rate vs drain rate.
+static std::atomic<uint64_t> g_raw_input_events{0};
+static std::atomic<uint64_t> g_raw_move_events{0};
+static auto g_raw_stats_last = std::chrono::steady_clock::now();
 
 MouseInputGatherer::MouseInputGatherer() = default;
 MouseInputGatherer::~MouseInputGatherer() { stop(); }
 
 LRESULT CALLBACK MouseInputGatherer::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_INPUT) {
+        g_raw_input_events.fetch_add(1, std::memory_order_relaxed);
         RAWINPUT raw = {};
         HRAWINPUT hri = (HRAWINPUT)lp;
         UINT sz = sizeof(raw);
@@ -24,6 +32,7 @@ LRESULT CALLBACK MouseInputGatherer::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
                 if (!(raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)) {
                     s_accum_dx += raw.data.mouse.lLastX;
                     s_accum_dy += raw.data.mouse.lLastY;
+                    g_raw_move_events.fetch_add(1, std::memory_order_relaxed);
                 }
                 // Buttons
                 if (raw.data.mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN)
@@ -88,7 +97,7 @@ bool MouseInputGatherer::start() {
         }
 
         ALOG("mouse_input: started ok");
-        std::cout << "[MouseInput] Started with NOLEGACY" << std::endl;
+        std::cout << "[MouseInput] Started (RIDEV_INPUTSINK)" << std::endl;
 
         // Message pump on this thread — dispatches WM_INPUT to WndProc
         MSG msg = {};
@@ -147,13 +156,25 @@ void MouseInputGatherer::stop() {
 
 RawMouseAccum MouseInputGatherer::drain() {
     RawMouseAccum result;
-    result.dx = s_accum_dx;
-    result.dy = s_accum_dy;
-    result.buttons = (uint8_t)s_accum_buttons;
-    result.wheel = s_accum_wheel;
-    s_accum_dx = 0;
-    s_accum_dy = 0;
-    s_accum_wheel = 0;
+    result.dx = s_accum_dx.exchange(0);
+    result.dy = s_accum_dy.exchange(0);
+    result.buttons = static_cast<uint8_t>(s_accum_buttons.load());
+    result.wheel = s_accum_wheel.exchange(0);
+
+    // Diagnostics: compare raw WM_INPUT rate vs drain rate (once per second).
+    static std::atomic<uint64_t> drain_count{0};
+    drain_count.fetch_add(1, std::memory_order_relaxed);
+    auto now = std::chrono::steady_clock::now();
+    if (now - g_raw_stats_last >= std::chrono::seconds(1)) {
+        g_raw_stats_last = now;
+        uint64_t ev = g_raw_input_events.exchange(0, std::memory_order_relaxed);
+        uint64_t mv = g_raw_move_events.exchange(0, std::memory_order_relaxed);
+        uint64_t dr = drain_count.exchange(0, std::memory_order_relaxed);
+        ALOG("mouse_rate: raw_events=%llu move_events=%llu drains=%llu (raw_hz=%llu drain_hz=%llu)",
+             (unsigned long long)ev, (unsigned long long)mv, (unsigned long long)dr,
+             (unsigned long long)ev, (unsigned long long)dr);
+    }
+
     if (result.dx || result.dy || result.wheel)
         ALOG("mouse_input: dx=%d dy=%d buttons=0x%02X wheel=%d", result.dx, result.dy, result.buttons, result.wheel);
     return result;

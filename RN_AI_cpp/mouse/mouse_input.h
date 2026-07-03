@@ -31,9 +31,9 @@ private:
     HWND hwnd_ = nullptr;
     bool raw_registered_ = false;
 
-    static int s_accum_dx;
-    static int s_accum_dy;
-    static int s_accum_buttons;
-    static int s_accum_wheel;
+    static std::atomic<int> s_accum_dx;
+    static std::atomic<int> s_accum_dy;
+    static std::atomic<int> s_accum_buttons;
+    static std::atomic<int> s_accum_wheel;
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 };

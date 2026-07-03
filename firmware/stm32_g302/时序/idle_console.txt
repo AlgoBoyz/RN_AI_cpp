@@ -1,0 +1,65 @@
+[*] pcap: F:/Work/Code/PersonalProject/SWEET/crates/sweet-firmware/stm32/Stm_g302/时序/idle_1000hz.pcapng
+[*] capture total duration: 67.847 s
+[*] EP 0x81 8B reports    : 1116
+
+  first frame at t = 66.183 s
+  last  frame at t = 67.847 s
+  silent prefix    : 66.183 s (97.5% of capture)
+  active window    : 1.664 s
+
+dx top 10:
+  dx=  -1:   300  (26.88%)
+  dx=  -2:   220  (19.71%)
+  dx=  -3:   164  (14.70%)
+  dx=   0:   123  (11.02%)
+  dx=  -4:   116  (10.39%)
+  dx=  -5:    63  (5.65%)
+  dx=  -9:    36  (3.23%)
+  dx=  -7:    32  (2.87%)
+  dx=  -8:    27  (2.42%)
+  dx=  -6:    22  (1.97%)
+dy top 10:
+  dy=  -1:   485  (43.46%)
+  dy=   0:   305  (27.33%)
+  dy=   1:   156  (13.98%)
+  dy=  -2:   130  (11.65%)
+  dy=   2:    25  (2.24%)
+  dy=  -3:    15  (1.34%)
+buttons: {0: 1115, 1: 1}
+wheel  : {0: 1116}
+
+strict-zero frames (btn=dx=dy=wheel=0): 1 (0.09%)
+nonzero-motion frames (dx!=0 or dy!=0): 1114 (99.82%)
+
+inter-arrival in active window:
+  mean/median/σ   : 1492 / 1015 / 5165 µs
+  min/max         : 944 / 132979 µs
+  p50/p95/p99     : 1015 / 2001 / 9999 µs
+
+burst count (gap > 5 ms): 25
+  burst sizes: min=1, median=1, max=1073
+  burst spans: min=0.0ms, max=1134.0ms
+  largest burst: 1073 frames (1134 ms continuous report)
+
+first 15 bursts (t / frames / span_ms / first_dx,dy / last_dx,dy):
+  burst  0: t=66.183s  n=1073  span=1134.0ms  first=( -1,  0)  last=(  0, -1)
+  burst  1: t=67.329s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+  burst  2: t=67.340s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+  burst  3: t=67.351s  n=   2  span=   2.0ms  first=(  0, -1)  last=(  1,  0)
+  burst  4: t=67.362s  n=   2  span=   4.0ms  first=(  0, -1)  last=(  1,  0)
+  burst  5: t=67.371s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+  burst  6: t=67.381s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+  burst  7: t=67.398s  n=   3  span=   8.0ms  first=(  0, -1)  last=(  0, -1)
+  burst  8: t=67.413s  n=   2  span=   4.0ms  first=(  0, -1)  last=(  0, -1)
+  burst  9: t=67.424s  n=   2  span=   4.0ms  first=(  0, -1)  last=(  0, -1)
+  burst 10: t=67.437s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+  burst 11: t=67.445s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+  burst 12: t=67.455s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+  burst 13: t=67.464s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+  burst 14: t=67.472s  n=   1  span=   0.0ms  first=(  0, -1)  last=(  0, -1)
+
+largest burst (1073 frames) magnitude profile:
+  |dx|: max=10, median=2, mean=2.81
+  |dy|: max=3, median=1, mean=0.89
+
+[+] wrote idle_findings.md
