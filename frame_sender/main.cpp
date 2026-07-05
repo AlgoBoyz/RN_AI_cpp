@@ -458,8 +458,6 @@ int main(int argc, char* argv[]) {
     // Query full screen size for full-frame capture
     int full_w = GetSystemMetrics(SM_CXSCREEN);
     int full_h = GetSystemMetrics(SM_CYSCREEN);
-    // Use a square large enough to cover the full screen
-    int cap_size = std::max(full_w, full_h);
 
     timeBeginPeriod(1);
     std::signal(SIGINT, signalHandler);
@@ -495,8 +493,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Capture full screen (cap_size x cap_size covers the whole display)
-    FrameCapture capturer(cap_size, cap_size, monitor);
+    // Capture full screen at actual monitor resolution
+    FrameCapture capturer(full_w, full_h, monitor);
     if (!capturer.valid()) {
         fprintf(stderr, "[frame_sender] FrameCapture init failed\n");
         codec.shutdown();
