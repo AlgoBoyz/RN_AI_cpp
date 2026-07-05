@@ -284,7 +284,7 @@ public:
         if (FAILED(m_dda.Context()->Map(m_staging, 0, D3D11_MAP_READ, 0, &mapped)))
             return {};
 
-        RawImage result(m_regionH, m_regionW, 4);
+        RawImage result(m_regionW, m_regionH, 4);
         for (int y = 0; y < m_regionH; y++)
             memcpy(result.data + y * m_regionW * 4,
                    (uint8_t*)mapped.pData + y * mapped.RowPitch, m_regionW * 4);
