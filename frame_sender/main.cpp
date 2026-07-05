@@ -402,8 +402,9 @@ struct CropRegion {
 
 static std::vector<CropRegion> parse_crop_regions(int argc, char* argv[]) {
     std::vector<CropRegion> regions;
-    // Default: single centered 640x640 region (backward compatible)
+    // Defaults: center 640×640 for AI + ammo region at (1990,1270) 500×130
     regions.push_back({0, -1, -1, 640, 640});
+    regions.push_back({1, 1990, 1270, 500, 130});
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -420,8 +421,8 @@ static std::vector<CropRegion> parse_crop_regions(int argc, char* argv[]) {
                 fprintf(stderr, "[frame_sender] invalid --crop-region format: %s\n", val.c_str());
                 continue;
             }
-            // If this is the first explicit --crop-region, replace default
-            if (regions.size() == 1 && regions[0].id == 0 && regions[0].x == -1 && regions[0].w == 640)
+            // If user passes any --crop-region on cmd line, replace defaults
+            if (regions.size() == 2 && regions[0].id == 0 && regions[0].x == -1 && regions[1].id == 1 && regions[1].x == 1990)
                 regions.clear();
             bool found = false;
             for (auto& r : regions) {
