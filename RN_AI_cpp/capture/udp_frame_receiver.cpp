@@ -178,25 +178,29 @@ void UdpFrameReceiver::ReceiveThread() {
             std::vector<uint8_t> frame_data = current_assembler->assemble();
             current_assembler.reset();
 
-            // Decode length-prefixed frame
-            auto decoded = decode_length_prefixed(frame_data.data(), frame_data.size());
+            // Parse multi-region header (also handles V1 fallback)
+            auto decoded = decode_multi_region(frame_data.data(), frame_data.size());
             if (!decoded) {
                 if (g_udp_log) fprintf(g_udp_log, "FAIL,%u,%u,%.2f,,header_decode_fail\n", current_frame_id, frag_count, assembly_ms);
                 continue;
             }
 
-            // Push compressed JPEG to queue (decode later in GetNextFrameCpu)
-            std::vector<uint8_t> jpeg_data(decoded->jpeg_data, decoded->jpeg_data + decoded->jpeg_size);
+            // Push raw assembled frame to queue (decoding done in GetNextFrameCpu)
+            AssembledFrame af;
+            af.data = std::move(frame_data);
+            af.frame_seq = decoded->header.frame_seq;
             {
                 std::lock_guard<std::mutex> lock(frame_mutex_);
-                while (compressed_queue_.size() >= MAX_QUEUE_SIZE) {
-                    compressed_queue_.pop();
-                }
-                compressed_queue_.push(std::move(jpeg_data));
+                while (frame_queue_.size() >= MAX_QUEUE_SIZE)
+                    frame_queue_.pop();
+                frame_queue_.push(std::move(af));
             }
             frame_cv_.notify_one();
 
-            log_frame(current_frame_id, frag_count, assembly_ms, -1.0, decoded->header.width, decoded->header.height,
+            // Log using region 0 info (backward compat)
+            auto& r0 = decoded->mr_header.regions[0];
+            log_frame(current_frame_id, frag_count, assembly_ms, -1.0,
+                      static_cast<uint32_t>(r0.width), static_cast<uint32_t>(r0.height),
                       decoded->header.capture_timestamp_ms, decoded->header.frame_seq);
         }
     }
@@ -204,35 +208,57 @@ void UdpFrameReceiver::ReceiveThread() {
 
 cv::Mat UdpFrameReceiver::GetNextFrameCpu() {
     std::unique_lock<std::mutex> lock(frame_mutex_);
-    frame_cv_.wait(lock, [this] { return !compressed_queue_.empty() || should_stop_; });
+    frame_cv_.wait(lock, [this] { return !frame_queue_.empty() || should_stop_; });
 
-    if (should_stop_ && compressed_queue_.empty()) {
+    if (should_stop_ && frame_queue_.empty()) {
         return cv::Mat();
     }
 
-    // Only keep the latest frame, drop stale ones
-    std::vector<uint8_t> jpeg_data;
-    while (!compressed_queue_.empty()) {
-        jpeg_data = std::move(compressed_queue_.front());
-        compressed_queue_.pop();
+    // Keep the latest frame, drop stale ones
+    AssembledFrame af;
+    while (!frame_queue_.empty()) {
+        af = std::move(frame_queue_.front());
+        frame_queue_.pop();
     }
     lock.unlock();
+
+    // Decode multi-region frame
+    auto decoded = decode_multi_region(af.data.data(), af.data.size());
+    if (!decoded) return cv::Mat();
+
+    // Cache decoded frame for callers that need other regions
+    last_mr_frame_storage_ = std::move(af.data);
+    last_mr_frame_ = *decoded;
+
+    // Re-point region_data pointers into our storage
+    for (uint32_t i = 0; i < last_mr_frame_.mr_header.num_regions; ++i) {
+        auto& e = last_mr_frame_.mr_header.regions[i];
+        last_mr_frame_.region_data[i] = last_mr_frame_storage_.data() + 4 + FRAME_HEADER_SIZE + e.jpeg_offset;
+        last_mr_frame_.region_size[i] = e.jpeg_size;
+    }
+
+    // Return region 0 (main AI frame) — backward compatible
+    if (last_mr_frame_.mr_header.num_regions == 0 || last_mr_frame_.region_size[0] == 0)
+        return cv::Mat();
+
+    std::vector<uint8_t> jpeg0(last_mr_frame_.region_data[0],
+                                last_mr_frame_.region_data[0] + last_mr_frame_.region_size[0]);
 
     // Decode JPEG
     cv::Mat frame;
 #ifdef USE_CUDA
     try {
         if (gpu_codec_ && gpu_codec_->isInitialized()) {
-            frame = gpu_codec_->decode(jpeg_data);
+            frame = gpu_codec_->decode(jpeg0);
         } else {
-            frame = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+            frame = cv::imdecode(jpeg0, cv::IMREAD_COLOR);
         }
     } catch (const std::exception& e) {
         std::cerr << "[UdpFrameReceiver] GPU decode failed: " << e.what() << ", falling back to CPU" << std::endl;
-        frame = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+        frame = cv::imdecode(jpeg0, cv::IMREAD_COLOR);
     }
 #else
-    frame = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+    frame = cv::imdecode(jpeg0, cv::IMREAD_COLOR);
 #endif
 
     return frame;

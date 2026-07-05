@@ -12,12 +12,19 @@ constexpr size_t FRAG_HEADER_SIZE = 10;
 constexpr size_t MAX_DATAGRAM_SIZE = 1400;
 constexpr size_t MAX_FRAG_PAYLOAD = MAX_DATAGRAM_SIZE - FRAG_HEADER_SIZE;
 constexpr size_t MAX_FRAGMENTS_PER_FRAME = 255;
-constexpr uint8_t PROTOCOL_VERSION = 1;
+constexpr uint8_t PROTOCOL_VERSION_V1 = 1;
+constexpr uint8_t PROTOCOL_VERSION_V2 = 2;  // multi-region
 constexpr uint8_t FORMAT_JPEG = 1;
+constexpr uint8_t FORMAT_MULTI_REGION = 2;
+constexpr int MAX_REGIONS = 8;
+constexpr size_t REGION_ENTRY_SIZE = 19; // 1+2+2+2+2+4+4
 
-// Frame header structure (30 bytes)
+// Frame header structure (30 bytes) — V1 & V2 share the same wire layout.
+// V1: single JPEG, width/height = image dims, jpeg_size = JPEG size.
+// V2 (FORMAT_MULTI_REGION): width/height = full source dims for coordinate ref,
+//     jpeg_size = total payload size after header, followed by region table + JPEGs.
 struct FrameHeader {
-    uint8_t version = PROTOCOL_VERSION;
+    uint8_t version = PROTOCOL_VERSION_V1;
     uint32_t width = 0;
     uint32_t height = 0;
     uint64_t frame_seq = 0;
@@ -25,14 +32,30 @@ struct FrameHeader {
     uint8_t format = FORMAT_JPEG;
     uint32_t jpeg_size = 0;
 
-    // Encode to buffer (must be at least FRAME_HEADER_SIZE bytes)
     void encode(uint8_t* buffer) const;
-
-    // Decode from buffer (must be at least FRAME_HEADER_SIZE bytes)
     static std::optional<FrameHeader> decode(const uint8_t* buffer, size_t size);
 };
 
-// Encode frame as length-prefixed format: [4B payload_len][FRAME_HEADER_SIZE B header][JPEG data]
+// ── V2 multi-region entries ──────────────────────────────────────────
+struct RegionEntry {
+    uint8_t  id = 0;         // 0 = main (AI), 1 = ammo, 2+ = future
+    int32_t  src_x = 0;      // source x on full frame
+    int32_t  src_y = 0;      // source y on full frame
+    int32_t  width  = 0;
+    int32_t  height = 0;
+    uint32_t jpeg_offset = 0; // byte offset from end of region table
+    uint32_t jpeg_size   = 0;
+
+    void encode(uint8_t* buffer) const;
+    static std::optional<RegionEntry> decode(const uint8_t* buffer, size_t available);
+};
+
+struct MultiRegionHeader {
+    uint32_t num_regions = 0;
+    RegionEntry regions[MAX_REGIONS];
+};
+
+// ── V1 helpers (unchanged) ──────────────────────────────────────────
 void encode_length_prefixed(
     const FrameHeader& header,
     const uint8_t* jpeg_data,
@@ -40,14 +63,35 @@ void encode_length_prefixed(
     std::vector<uint8_t>& output
 );
 
-// Decode length-prefixed frame, returns header and pointer to JPEG data
-// Returns nullptr on failure
 struct DecodedFrame {
     FrameHeader header;
     const uint8_t* jpeg_data;
     size_t jpeg_size;
 };
 std::optional<DecodedFrame> decode_length_prefixed(const uint8_t* data, size_t size);
+
+// ── V2 multi-region helpers ──────────────────────────────────────────
+// Payload layout after 30B FrameHeader:
+//   [4B num_regions]
+//   [REGION_ENTRY_SIZE B * num_regions]
+//   [JPEG data for region 0]
+//   [JPEG data for region 1]
+//   ...
+void encode_multi_region(
+    const FrameHeader& header,
+    const MultiRegionHeader& mr_header,
+    const std::vector<std::vector<uint8_t>>& region_jpegs,
+    std::vector<uint8_t>& output
+);
+
+struct DecodedMultiRegion {
+    FrameHeader header;
+    MultiRegionHeader mr_header;
+    // Pointers into the decoded buffer; valid as long as the buffer lives.
+    const uint8_t* region_data[MAX_REGIONS] = {};
+    size_t         region_size[MAX_REGIONS] = {};
+};
+std::optional<DecodedMultiRegion> decode_multi_region(const uint8_t* data, size_t size);
 
 // Fragment encoder - splits complete frame into UDP datagrams
 class FragmentEncoder {

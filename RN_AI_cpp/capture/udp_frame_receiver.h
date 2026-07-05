@@ -15,28 +15,46 @@
 #include <queue>
 #include <memory>
 #include <chrono>
+#include <vector>
+#include <cstdint>
 
 #pragma comment(lib, "ws2_32.lib")
+
+// Stores a fully assembled multi-region frame (raw encoded data).
+struct AssembledFrame {
+    std::vector<uint8_t> data;  // complete length-prefixed frame blob
+    uint64_t frame_seq = 0;
+};
 
 class UdpFrameReceiver : public IScreenCapture {
 public:
     explicit UdpFrameReceiver(int port);
     ~UdpFrameReceiver();
-    
+
+    // Returns region 0 as cv::Mat (backward compatible, used by AI pipeline).
     cv::Mat GetNextFrameCpu() override;
-    
+
+    // Get the full multi-region frame after the last GetNextFrameCpu() call.
+    // Returns nullptr if no frame has been received yet.
+    const DecodedMultiRegion* GetLastMultiRegion() const { return &last_mr_frame_; }
+
 private:
     void ReceiveThread();
-    
+
     int port_;
     SOCKET socket_;
-    
+
     std::atomic<bool> should_stop_;
     std::thread receive_thread_;
-    
+
     std::mutex frame_mutex_;
     std::condition_variable frame_cv_;
-    std::queue<std::vector<uint8_t>> compressed_queue_;  // raw JPEG data, no decode
+    std::queue<AssembledFrame> frame_queue_;
+
+    // Storage for the last fully decoded multi-region frame (for callers
+    // that need regions other than 0).
+    DecodedMultiRegion last_mr_frame_;
+    std::vector<uint8_t> last_mr_frame_storage_;  // keeps the buffer alive
 
 #ifdef USE_CUDA
     std::unique_ptr<GpuJpegCodec> gpu_codec_;

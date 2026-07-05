@@ -153,7 +153,7 @@ void FragmentEncoder::encode(
         datagram[3] = 'F';
 
         // Version
-        datagram[4] = PROTOCOL_VERSION;
+        datagram[4] = PROTOCOL_VERSION_V1;
 
         // Header length
         datagram[5] = FRAG_HEADER_SIZE;
@@ -193,7 +193,7 @@ std::optional<FragmentEncoder::FragmentInfo> FragmentEncoder::decode_datagram(
     }
 
     // Verify version
-    if (datagram[4] != PROTOCOL_VERSION) {
+    if (datagram[4] != PROTOCOL_VERSION_V1) {
         return std::nullopt;
     }
 
@@ -288,4 +288,123 @@ bool is_new_frame_id(uint16_t new_id, uint16_t old_id) {
 
     // If the difference is less than half the range, consider it newer
     return diff > 0 && diff < half_range;
+}
+
+// ── V2 multi-region ────────────────────────────────────────────────────
+
+void RegionEntry::encode(uint8_t* buffer) const {
+    buffer[0] = id;
+    write_u16_le(buffer + 1, static_cast<uint16_t>(src_x));
+    write_u16_le(buffer + 3, static_cast<uint16_t>(src_y));
+    write_u16_le(buffer + 5, static_cast<uint16_t>(width));
+    write_u16_le(buffer + 7, static_cast<uint16_t>(height));
+    write_u32_le(buffer + 9, jpeg_offset);
+    write_u32_le(buffer + 13, jpeg_size);
+}
+
+std::optional<RegionEntry> RegionEntry::decode(const uint8_t* buffer, size_t available) {
+    if (available < REGION_ENTRY_SIZE) return std::nullopt;
+    RegionEntry e;
+    e.id        = buffer[0];
+    e.src_x     = static_cast<int16_t>(read_u16_le(buffer + 1));
+    e.src_y     = static_cast<int16_t>(read_u16_le(buffer + 3));
+    e.width     = static_cast<int16_t>(read_u16_le(buffer + 5));
+    e.height    = static_cast<int16_t>(read_u16_le(buffer + 7));
+    e.jpeg_offset = read_u32_le(buffer + 9);
+    e.jpeg_size   = read_u32_le(buffer + 13);
+    return e;
+}
+
+void encode_multi_region(
+    const FrameHeader& header,
+    const MultiRegionHeader& mr_header,
+    const std::vector<std::vector<uint8_t>>& region_jpegs,
+    std::vector<uint8_t>& output)
+{
+    uint32_t num = mr_header.num_regions;
+    uint32_t table_size = 4 + num * REGION_ENTRY_SIZE;
+
+    uint32_t jpeg_start = table_size;
+    uint32_t jpeg_total = 0;
+    std::vector<uint32_t> offsets(num);
+    for (uint32_t i = 0; i < num; ++i) {
+        offsets[i] = jpeg_start + jpeg_total;
+        jpeg_total += static_cast<uint32_t>(region_jpegs[i].size());
+    }
+
+    FrameHeader hdr = header;
+    hdr.jpeg_size = table_size + jpeg_total;
+
+    uint32_t payload_len = FRAME_HEADER_SIZE + hdr.jpeg_size;
+    output.resize(4 + payload_len);
+    write_u32_le(output.data(), payload_len);
+    hdr.encode(output.data() + 4);
+
+    uint8_t* table_pos = output.data() + 4 + FRAME_HEADER_SIZE;
+    write_u32_le(table_pos, num);
+    for (uint32_t i = 0; i < num; ++i) {
+        RegionEntry entry = mr_header.regions[i];
+        entry.jpeg_offset = offsets[i];
+        entry.jpeg_size   = static_cast<uint32_t>(region_jpegs[i].size());
+        entry.encode(table_pos + 4 + i * REGION_ENTRY_SIZE);
+    }
+
+    for (uint32_t i = 0; i < num; ++i) {
+        std::memcpy(output.data() + 4 + FRAME_HEADER_SIZE + offsets[i],
+                    region_jpegs[i].data(), region_jpegs[i].size());
+    }
+}
+
+std::optional<DecodedMultiRegion> decode_multi_region(const uint8_t* data, size_t size) {
+    if (size < 4 + FRAME_HEADER_SIZE) return std::nullopt;
+
+    uint32_t payload_len = read_u32_le(data);
+    if (size < 4 + payload_len) return std::nullopt;
+
+    auto header_opt = FrameHeader::decode(data + 4, payload_len);
+    if (!header_opt) return std::nullopt;
+
+    DecodedMultiRegion result;
+    result.header = *header_opt;
+
+    // V1 fallback
+    if (result.header.format != FORMAT_MULTI_REGION) {
+        result.mr_header.num_regions = 1;
+        auto& r0 = result.mr_header.regions[0];
+        r0.id = 0;
+        r0.jpeg_offset = 0;
+        r0.jpeg_size = payload_len - FRAME_HEADER_SIZE;
+        result.region_data[0] = data + 4 + FRAME_HEADER_SIZE;
+        result.region_size[0] = r0.jpeg_size;
+        return result;
+    }
+
+    // V2: parse region table
+    uint32_t remaining = payload_len - FRAME_HEADER_SIZE;
+    const uint8_t* pos = data + 4 + FRAME_HEADER_SIZE;
+    if (remaining < 4) return std::nullopt;
+
+    uint32_t num = read_u32_le(pos);
+    if (num > MAX_REGIONS) num = MAX_REGIONS;
+    result.mr_header.num_regions = num;
+    pos += 4; remaining -= 4;
+
+    for (uint32_t i = 0; i < num; ++i) {
+        if (remaining < REGION_ENTRY_SIZE) break;
+        auto entry_opt = RegionEntry::decode(pos, remaining);
+        if (!entry_opt) break;
+        result.mr_header.regions[i] = *entry_opt;
+        pos += REGION_ENTRY_SIZE;
+        remaining -= REGION_ENTRY_SIZE;
+    }
+
+    for (uint32_t i = 0; i < result.mr_header.num_regions; ++i) {
+        auto& e = result.mr_header.regions[i];
+        if (e.jpeg_offset + e.jpeg_size <= payload_len - FRAME_HEADER_SIZE) {
+            result.region_data[i] = data + 4 + FRAME_HEADER_SIZE + e.jpeg_offset;
+            result.region_size[i] = e.jpeg_size;
+        }
+    }
+
+    return result;
 }

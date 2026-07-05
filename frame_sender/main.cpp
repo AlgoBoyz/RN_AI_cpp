@@ -9,6 +9,7 @@
 #include <vector>
 #include <atomic>
 #include <memory>
+#include <sstream>
 
 #include <opencv2/opencv.hpp>
 
@@ -19,9 +20,7 @@
 static std::atomic<bool> g_running{true};
 std::atomic<bool> capture_method_changed{false};
 
-static void signalHandler(int) {
-    g_running.store(false);
-}
+static void signalHandler(int) { g_running.store(false); }
 
 struct Stats {
     uint64_t frames_sent = 0;
@@ -29,72 +28,102 @@ struct Stats {
     double total_send_ms = 0.0;
 };
 
+// ── Crop region descriptor ──────────────────────────────────────────────
+struct CropRegion {
+    uint8_t id;
+    int x, y, w, h;      // source coordinates on full frame; -1 = centered
+};
+
+static std::vector<CropRegion> parse_crop_regions(int argc, char* argv[]) {
+    std::vector<CropRegion> regions;
+    // Default: single centered 640x640 region (backward compatible)
+    regions.push_back({0, -1, -1, 640, 640});
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--crop-region" && i + 1 < argc) {
+            std::string val = argv[++i];
+            // Parse "id,x,y,w,h"  or  "id,center,center,w,h"
+            int id, x, y, w, h;
+            char cx_buf[32], cy_buf[32];
+            if (sscanf_s(val.c_str(), "%d,%d,%d,%d,%d", &id, &x, &y, &w, &h) == 5) {
+                // numeric coordinates
+            } else if (sscanf_s(val.c_str(), "%d,%31[^,],%31[^,],%d,%d", &id, cx_buf, (unsigned)sizeof(cx_buf), cy_buf, (unsigned)sizeof(cy_buf), &w, &h) == 5) {
+                x = (_stricmp(cx_buf, "center") == 0) ? -1 : std::atoi(cx_buf);
+                y = (_stricmp(cy_buf, "center") == 0) ? -1 : std::atoi(cy_buf);
+            } else {
+                fprintf(stderr, "[frame_sender] invalid --crop-region format: %s\n", val.c_str());
+                continue;
+            }
+            // If this is the first --crop-region on cmd line, replace default
+            if (i == 1 || (i > 1 && std::string(argv[i-1]) == "--crop-region" && regions.size() == 1 && regions[0].id == 0 && regions[0].x == -1)) {
+                regions.clear();
+            }
+            // Remove duplicate ID: replace or append
+            bool found = false;
+            for (auto& r : regions) {
+                if (r.id == id) { r = {static_cast<uint8_t>(id), x, y, w, h}; found = true; break; }
+            }
+            if (!found) regions.push_back({static_cast<uint8_t>(id), x, y, w, h});
+        }
+        // Keep old --crop-size for backward compat (maps to region 0)
+        if (arg == "--crop-size" && i + 1 < argc) {
+            int s = std::atoi(argv[++i]);
+            for (auto& r : regions) {
+                if (r.id == 0) { r.w = s; r.h = s; break; }
+            }
+        }
+    }
+    return regions;
+}
+
 int main(int argc, char* argv[]) {
     // Parse command-line arguments
     std::string host = "192.168.137.2";
     int port = 12345;
     int monitor = 0;
-    int crop_size = 640;
     int jpeg_quality = 80;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--host" && i + 1 < argc) {
-            host = argv[++i];
-        } else if (arg == "--port" && i + 1 < argc) {
-            port = std::atoi(argv[++i]);
-        } else if (arg == "--monitor" && i + 1 < argc) {
-            monitor = std::atoi(argv[++i]);
-        } else if (arg == "--crop-size" && i + 1 < argc) {
-            crop_size = std::atoi(argv[++i]);
-        } else if (arg == "--jpeg-quality" && i + 1 < argc) {
-            jpeg_quality = std::atoi(argv[++i]);
-        }
+        if (arg == "--host" && i + 1 < argc) host = argv[++i];
+        else if (arg == "--port" && i + 1 < argc) port = std::atoi(argv[++i]);
+        else if (arg == "--monitor" && i + 1 < argc) monitor = std::atoi(argv[++i]);
+        else if (arg == "--jpeg-quality" && i + 1 < argc) jpeg_quality = std::atoi(argv[++i]);
     }
 
-    printf("[frame_sender] host=%s port=%d monitor=%d crop_size=%d jpeg_quality=%d\n",
-           host.c_str(), port, monitor, crop_size, jpeg_quality);
+    auto regions = parse_crop_regions(argc, argv);
+    printf("[frame_sender] host=%s port=%d monitor=%d jpeg_quality=%d regions=%zu\n",
+           host.c_str(), port, monitor, jpeg_quality, regions.size());
+    for (auto& r : regions)
+        printf("  region %u: (%d,%d) %dx%d\n", r.id, r.x, r.y, r.w, r.h);
 
-    // Register signal handler
     std::signal(SIGINT, signalHandler);
 
-    // Initialize Winsock
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        fprintf(stderr, "[frame_sender] WSAStartup failed\n");
-        return 1;
-    }
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) { fprintf(stderr, "[frame_sender] WSAStartup failed\n"); return 1; }
 
-    // Create UDP socket
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock == INVALID_SOCKET) {
-        fprintf(stderr, "[frame_sender] socket() failed: %d\n", WSAGetLastError());
-        WSACleanup();
-        return 1;
-    }
+    if (sock == INVALID_SOCKET) { fprintf(stderr, "[frame_sender] socket() failed: %d\n", WSAGetLastError()); WSACleanup(); return 1; }
 
-    // Resolve destination address
     struct sockaddr_in destAddr{};
     destAddr.sin_family = AF_INET;
     destAddr.sin_port = htons(static_cast<u_short>(port));
     if (inet_pton(AF_INET, host.c_str(), &destAddr.sin_addr) != 1) {
         fprintf(stderr, "[frame_sender] invalid host: %s\n", host.c_str());
-        closesocket(sock);
-        WSACleanup();
-        return 1;
+        closesocket(sock); WSACleanup(); return 1;
     }
 
-    // Initialize GPUJPEG codec
     GpuJpegCodec codec;
-    if (!codec.initialize()) {
-        fprintf(stderr, "[frame_sender] GpuJpegCodec::initialize() failed\n");
-        closesocket(sock);
-        WSACleanup();
-        return 1;
-    }
+    if (!codec.initialize()) { fprintf(stderr, "[frame_sender] GpuJpegCodec::initialize() failed\n"); closesocket(sock); WSACleanup(); return 1; }
 
-    // Create DXGI screen capture
-    auto capturer = std::make_unique<DuplicationAPIScreenCapture>(crop_size, crop_size, monitor);
+    // ── Query full monitor resolution ──
+    int full_w = GetSystemMetrics(SM_CXSCREEN);
+    int full_h = GetSystemMetrics(SM_CYSCREEN);
+    printf("[frame_sender] full screen: %dx%d\n", full_w, full_h);
+
+    // Create DXGI screen capture at full resolution
+    auto capturer = std::make_unique<DuplicationAPIScreenCapture>(full_w, full_h, monitor);
 
     Stats stats;
     uint64_t frame_seq = 0;
@@ -105,72 +134,75 @@ int main(int argc, char* argv[]) {
     printf("[frame_sender] starting main loop (Ctrl+C to stop)...\n");
 
     while (g_running.load()) {
-        // Capture frame
-        cv::Mat frame = capturer->GetNextFrameCpu();
-        if (frame.empty()) {
-            continue;
-        }
+        cv::Mat full_frame = capturer->GetNextFrameCpu();
+        if (full_frame.empty()) continue;
 
-        // Center crop to square
-        cv::Mat cropped;
-        int fw = frame.cols;
-        int fh = frame.rows;
-        if (fw >= crop_size && fh >= crop_size) {
-            int x = (fw - crop_size) / 2;
-            int y = (fh - crop_size) / 2;
-            cropped = frame(cv::Rect(x, y, crop_size, crop_size)).clone();
-        } else {
-            // Frame smaller than crop_size, use as-is
-            cropped = frame;
-        }
+        int fw = full_frame.cols, fh = full_frame.rows;
 
-        int out_w = cropped.cols;
-        int out_h = cropped.rows;
-
-        // Encode to JPEG
+        // ── Crop each region and encode as JPEG ──
         auto t_enc_start = std::chrono::high_resolution_clock::now();
-        std::vector<uint8_t> jpeg_data = codec.encode(cropped, jpeg_quality);
+
+        std::vector<std::vector<uint8_t>> region_jpegs(regions.size());
+        MultiRegionHeader mr_header;
+        mr_header.num_regions = static_cast<uint32_t>(regions.size());
+
+        for (size_t i = 0; i < regions.size(); ++i) {
+            auto& cr = regions[i];
+
+            // Resolve centered coordinates
+            int rx = cr.x, ry = cr.y;
+            if (rx < 0) rx = (fw - cr.w) / 2;
+            if (ry < 0) ry = (fh - cr.h) / 2;
+            rx = std::max(0, std::min(rx, fw - 1));
+            ry = std::max(0, std::min(ry, fh - 1));
+            int rw = std::min(cr.w, fw - rx);
+            int rh = std::min(cr.h, fh - ry);
+
+            cv::Mat cropped = full_frame(cv::Rect(rx, ry, rw, rh)).clone();
+            region_jpegs[i] = codec.encode(cropped, jpeg_quality);
+
+            auto& entry = mr_header.regions[i];
+            entry.id = cr.id;
+            entry.src_x = rx;
+            entry.src_y = ry;
+            entry.width = rw;
+            entry.height = rh;
+            entry.jpeg_offset = 0;  // filled by encode_multi_region
+            entry.jpeg_size = static_cast<uint32_t>(region_jpegs[i].size());
+
+            if (region_jpegs[i].empty()) {
+                fprintf(stderr, "[frame_sender] JPEG encode failed for region %u\n", cr.id);
+            }
+        }
+
         auto t_enc_end = std::chrono::high_resolution_clock::now();
         double enc_ms = std::chrono::duration<double, std::milli>(t_enc_end - t_enc_start).count();
         stats.total_encode_ms += enc_ms;
 
-        if (jpeg_data.empty()) {
-            fprintf(stderr, "[frame_sender] JPEG encode failed for frame %llu\n",
-                    static_cast<unsigned long long>(frame_seq));
-            ++frame_seq;
-            ++frame_id;
-            continue;
-        }
-
-        // Build frame header
+        // ── Build multi-region frame ──
         FrameHeader header;
-        header.width = static_cast<uint32_t>(out_w);
-        header.height = static_cast<uint32_t>(out_h);
+        header.version = PROTOCOL_VERSION_V2;
+        header.width = static_cast<uint32_t>(fw);
+        header.height = static_cast<uint32_t>(fh);
         header.frame_seq = frame_seq;
         header.capture_timestamp_ms = static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count());
-        header.format = FORMAT_JPEG;
-        header.jpeg_size = static_cast<uint32_t>(jpeg_data.size());
+        header.format = FORMAT_MULTI_REGION;  // V2
 
-        // Encode as length-prefixed frame
         std::vector<uint8_t> frame_buf;
-        encode_length_prefixed(header, jpeg_data.data(), jpeg_data.size(), frame_buf);
+        encode_multi_region(header, mr_header, region_jpegs, frame_buf);
 
-        // Fragment into datagrams
+        // ── Fragment and send ──
         std::vector<std::vector<uint8_t>> datagrams;
         FragmentEncoder::encode(frame_id, frame_buf.data(), frame_buf.size(), datagrams);
 
-        // Send each fragment
         auto t_send_start = std::chrono::high_resolution_clock::now();
         for (const auto& dg : datagrams) {
-            int ret = sendto(sock, reinterpret_cast<const char*>(dg.data()),
-                             static_cast<int>(dg.size()), 0,
-                             reinterpret_cast<const sockaddr*>(&destAddr),
-                             static_cast<int>(sizeof(destAddr)));
-            if (ret < 0) {
-                fprintf(stderr, "[frame_sender] sendto failed: %d\n", WSAGetLastError());
-            }
+            sendto(sock, reinterpret_cast<const char*>(dg.data()),
+                   static_cast<int>(dg.size()), 0,
+                   reinterpret_cast<const sockaddr*>(&destAddr),
+                   static_cast<int>(sizeof(destAddr)));
         }
         auto t_send_end = std::chrono::high_resolution_clock::now();
         double send_ms = std::chrono::duration<double, std::milli>(t_send_end - t_send_start).count();
@@ -181,35 +213,27 @@ int main(int argc, char* argv[]) {
         ++frame_id;
         ++fps_counter;
 
-        // Print FPS every 100 frames
         if (fps_counter % 100 == 0) {
             auto now = std::chrono::high_resolution_clock::now();
             double elapsed = std::chrono::duration<double>(now - fps_start).count();
             double fps = 100.0 / elapsed;
-            printf("[frame_sender] frame=%llu fps=%.1f enc=%.2fms send=%.2fms\n",
+            printf("[frame_sender] frame=%llu fps=%.1f enc=%.2fms send=%.2fms regions=%zu\n",
                    static_cast<unsigned long long>(stats.frames_sent),
-                   fps, enc_ms, send_ms);
+                   fps, enc_ms, send_ms, regions.size());
             fps_start = now;
         }
 
-        // 固定 10ms 间隔 = 100 FPS
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    // Print final statistics
     printf("\n[frame_sender] shutting down...\n");
-    printf("[frame_sender] total frames sent: %llu\n",
-           static_cast<unsigned long long>(stats.frames_sent));
+    printf("[frame_sender] total frames sent: %llu\n", static_cast<unsigned long long>(stats.frames_sent));
     if (stats.frames_sent > 0) {
-        double avg_enc = stats.total_encode_ms / static_cast<double>(stats.frames_sent);
-        double avg_send = stats.total_send_ms / static_cast<double>(stats.frames_sent);
-        printf("[frame_sender] avg encode: %.2f ms\n", avg_enc);
-        printf("[frame_sender] avg send:   %.2f ms\n", avg_send);
+        printf("[frame_sender] avg encode: %.2f ms\n", stats.total_encode_ms / static_cast<double>(stats.frames_sent));
+        printf("[frame_sender] avg send:   %.2f ms\n", stats.total_send_ms / static_cast<double>(stats.frames_sent));
     }
 
-    // Cleanup
     closesocket(sock);
     WSACleanup();
-
     return 0;
 }
