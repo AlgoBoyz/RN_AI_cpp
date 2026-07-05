@@ -124,7 +124,7 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
             // instead of full speed. Full speed resumes the moment aiming
             // turns true. Skip the gate entirely while the overlay needs live
             // frames or auto_aim is on.
-            if (!aiming.load() && !config.auto_aim)
+            if (config.inference_idle_throttle && !aiming.load() && !config.auto_aim)
             {
                 static auto last_idle = std::chrono::steady_clock::now();
                 auto now = std::chrono::steady_clock::now();

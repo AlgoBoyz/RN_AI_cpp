@@ -94,6 +94,20 @@ public:
     float speedCurveExponent;
     float snapBoostFactor;
 
+    // PID controller (移植自 Python RN_AI/src/pid.py)。aim_controller=1 时启用，
+    // 旁路 Kalman/Smoothing 预测链，吃原始屏幕误差。
+    int   aim_controller;            // 0=SUNONE(Kalman/Smooth), 1=PID
+    float pid_kp_x, pid_kp_y;        // 比例
+    float pid_ki_x, pid_ki_y;        // 积分
+    float pid_kd_x, pid_kd_y;        // 微分
+    float pid_windup_x, pid_windup_y;// 积分 clamp 上限（>0 生效）
+    int   pid_anti_windup_mode;      // 0=Freeze, 1=BackCalc
+    float pid_backcalc_gain_x, pid_backcalc_gain_y;
+    float pid_deadzone;              // 末端死区半径（px），0=禁用
+    bool  pid_output_limit_enabled;  // true 时按 ±pid_out_max 限幅
+    float pid_out_max;
+    float pid_smooth_x, pid_smooth_y;// 输出混合：1.0=纯P+I+D，0.0=纯Δerror（Python 默认）
+
     bool easynorecoil;
     float easynorecoilstrength;
     std::string input_method; // "WIN32", "ARDUINO", "MAKCU", "KMBOX_B", "KMBOX_NET"
@@ -110,6 +124,15 @@ public:
     // Sensitivity multiplier applied to passthrough human mouse movement
     // (dx/dy) before forwarding to hardware. Range 0.0 - 1.5.
     float human_mouse_sensitivity;
+    // Aim trigger mode:
+    //   0 = hold (aim while button held)
+    //   1 = toggle-timed (tap = aim for aim_timed_duration_ms; tap again in
+    //       window = cancel; holding past the window = stay aimed until release)
+    int aim_trigger_mode;
+    int aim_timed_duration_ms;
+    // When true, throttle capture+inference to ~10fps when not aiming
+    // to save GPU energy. Disable for always-full-speed inference.
+    bool inference_idle_throttle;
 
     // Arduino
     int arduino_baudrate;

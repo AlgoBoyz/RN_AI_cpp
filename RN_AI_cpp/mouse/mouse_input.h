@@ -37,3 +37,7 @@ private:
     static std::atomic<int> s_accum_wheel;
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 };
+
+// Global gatherer instance — set during startup, read by moveWorkerLoop
+// and keyboard_listener to decide who drives `aiming`.
+extern MouseInputGatherer* g_mouse_input;

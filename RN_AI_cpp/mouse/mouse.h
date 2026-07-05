@@ -22,6 +22,7 @@
 #include "Kmbox_b.h"
 #include "KmboxNetConnection.h"
 #include "MakcuConnection.h"
+#include "pid_controller.h"
 
 class MouseThread
 {
@@ -124,6 +125,9 @@ private:
     double last_kalman_q{ -1.0 };
     double last_kalman_r{ -1.0 };
 
+    // PID 控制器（aim_controller=1 时启用，旁路 Kalman/Smoothing 链）
+    DualAxisPID _pid;
+
     // RN_AI prediction state
     std::chrono::steady_clock::time_point prediction_prev_time{};
     double prediction_prev_x{ 0.0 };
@@ -179,6 +183,7 @@ private:
     std::pair<int, int> moveWithSmoothing(double targetX, double targetY, double fps);
     std::pair<int, int> moveWithKalman(double targetX, double targetY, double fps);
     std::pair<int, int> moveWithKalmanAndSmoothing(double targetX, double targetY, double fps);
+    std::pair<int, int> moveWithPid(double targetX, double targetY, double fps);
     std::pair<int, int> computeMove(double targetX, double targetY, double fps, double infer_latency_ms, double camera_dx, double camera_dy);
 public:
     std::mutex input_method_mutex;
@@ -258,6 +263,9 @@ public:
     // Kalma
     void moveMouseWithKalman(double targetX, double targetY);
     void setKalmanParams(double processNoise, double measurementNoise);
+
+    // PID：从全局 config 同步参数到 _pid（构造、updateConfig、UI 调参后调用）
+    void configurePidFromConfig();
     void setKalmanSpeedMultiplierX(double m) {
         std::lock_guard<std::mutex> lg(input_method_mutex);
         kalman_speed_multiplier_x = std::max(0.0, m);

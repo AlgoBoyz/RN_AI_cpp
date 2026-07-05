@@ -107,6 +107,7 @@
     <ClCompile Include="mouse\kmbox_net\kmboxNet.cpp" />
     <ClCompile Include="mouse\MakcuConnection.cpp" />
     <ClCompile Include="mouse\mouse.cpp" />
+    <ClCompile Include="mouse\pid_controller.cpp" />
     <ClCompile Include="mouse\mouse_input.cpp" />
     <ClCompile Include="mouse\SerialConnection.cpp" />
     <ClCompile Include="mouse\AimbotTarget.cpp" />
@@ -178,6 +179,7 @@
     <ClInclude Include="modules\makcu\include\makcu_c.h" />
     <ClInclude Include="modules\makcu\include\serialport.h" />
     <ClInclude Include="mouse\mouse.h" />
+    <ClInclude Include="mouse\pid_controller.h" />
     <ClInclude Include="mouse\mouse_input.h" />
     <ClInclude Include="mouse\SerialConnection.h" />
     <ClInclude Include="mouse\AimbotTarget.h" />

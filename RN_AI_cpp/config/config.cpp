@@ -130,7 +130,22 @@ bool Config::loadConfig(const std::string& filename)
         snapRadius = 1.5f;
         nearRadius = 25.0f;
         speedCurveExponent = 3.0f;
-        snapBoostFactor = 1.15f; 
+        snapBoostFactor = 1.15f;
+
+        // PID defaults（kp/ki 对齐 Python，kd 降为 0.01 避免 D 项主导输出，
+        // smooth 默认 0.5 折中，output_limit 默认开启兜底）
+        aim_controller = 0;            // SUNONE
+        pid_kp_x = 0.4f;  pid_kp_y = 0.4f;
+        pid_ki_x = 0.02f; pid_ki_y = 0.02f;
+        pid_kd_x = 0.01f; pid_kd_y = 0.01f;
+        pid_windup_x = 100.0f; pid_windup_y = 100.0f;
+        pid_anti_windup_mode = 0;       // Freeze
+        pid_backcalc_gain_x = 0.1f; pid_backcalc_gain_y = 0.1f;
+        pid_deadzone = 5.0f;
+        pid_output_limit_enabled = true;
+        pid_out_max = 40.0f;
+        pid_smooth_x = 0.5f;  // 0=纯Δerror, 1.0=纯P+I+D
+        pid_smooth_y = 0.5f;
 
         easynorecoil = false;
         easynorecoilstrength = 0.0f;
@@ -140,6 +155,9 @@ bool Config::loadConfig(const std::string& filename)
         wind_mouse_enabled = true;
         fusion_mode = 0;
         human_mouse_sensitivity = 1.0f;
+        aim_trigger_mode = 0;
+        aim_timed_duration_ms = 2000;
+        inference_idle_throttle = true;
         wind_G = 18.0f;
         wind_W = 15.0f;
         wind_M = 10.0f;
@@ -573,6 +591,29 @@ bool Config::loadConfig(const std::string& filename)
     speedCurveExponent = (float)get_double("speedCurveExponent", 3.0);
     snapBoostFactor = (float)get_double("snapBoostFactor", 1.15);
 
+    // PID
+    aim_controller = get_long("aim_controller", 0);
+    if (aim_controller < 0) aim_controller = 0;
+    if (aim_controller > 1) aim_controller = 1;
+    pid_kp_x = (float)get_double("pid_kp_x", 0.4);
+    pid_kp_y = (float)get_double("pid_kp_y", 0.4);
+    pid_ki_x = (float)get_double("pid_ki_x", 0.001);
+    pid_ki_y = (float)get_double("pid_ki_y", 0.001);
+    pid_kd_x = (float)get_double("pid_kd_x", 0.05);
+    pid_kd_y = (float)get_double("pid_kd_y", 0.05);
+    pid_windup_x = (float)get_double("pid_windup_x", 100.0);
+    pid_windup_y = (float)get_double("pid_windup_y", 100.0);
+    pid_anti_windup_mode = get_long("pid_anti_windup_mode", 0);
+    if (pid_anti_windup_mode < 0) pid_anti_windup_mode = 0;
+    if (pid_anti_windup_mode > 1) pid_anti_windup_mode = 1;
+    pid_backcalc_gain_x = (float)get_double("pid_backcalc_gain_x", 0.1);
+    pid_backcalc_gain_y = (float)get_double("pid_backcalc_gain_y", 0.1);
+    pid_deadzone = (float)get_double("pid_deadzone", 5.0);
+    pid_output_limit_enabled = get_bool("pid_output_limit_enabled", false);
+    pid_out_max = (float)get_double("pid_out_max", 50.0);
+    pid_smooth_x = (float)get_double("pid_smooth_x", 0.0);
+    pid_smooth_y = (float)get_double("pid_smooth_y", 0.0);
+
     // Easynorecoil
     easynorecoil = get_bool("easynorecoil", false);
     easynorecoilstrength = (float)get_double("easynorecoilstrength", 0.0);
@@ -582,6 +623,9 @@ bool Config::loadConfig(const std::string& filename)
     wind_mouse_enabled = get_bool("wind_mouse_enabled", true);
     fusion_mode = get_long("fusion_mode", 0);
     human_mouse_sensitivity = (float)get_double("human_mouse_sensitivity", 1.0);
+    aim_trigger_mode = get_long("aim_trigger_mode", 0);
+    aim_timed_duration_ms = get_long("aim_timed_duration_ms", 2000);
+    inference_idle_throttle = get_bool("inference_idle_throttle", true);
     wind_G = (float)get_double("wind_G", 18.0f);
     wind_W = (float)get_double("wind_W", 15.0f);
     wind_M = (float)get_double("wind_M", 10.0f);
@@ -926,7 +970,29 @@ bool Config::saveConfig(const std::string& filename)
         << "nearRadius = " << nearRadius << "\n"
         << "speedCurveExponent = " << speedCurveExponent << "\n"
         << std::fixed << std::setprecision(2)
-        << "snapBoostFactor = " << snapBoostFactor << "\n"
+        << "snapBoostFactor = " << snapBoostFactor << "\n\n"
+
+        << "# PID controller (aim_controller: 0=SUNONE, 1=PID)\n"
+        << "aim_controller = " << aim_controller << "\n"
+        << std::fixed << std::setprecision(4)
+        << "pid_kp_x = " << pid_kp_x << "\n"
+        << "pid_kp_y = " << pid_kp_y << "\n"
+        << std::setprecision(5)
+        << "pid_ki_x = " << pid_ki_x << "\n"
+        << "pid_ki_y = " << pid_ki_y << "\n"
+        << std::setprecision(4)
+        << "pid_kd_x = " << pid_kd_x << "\n"
+        << "pid_kd_y = " << pid_kd_y << "\n"
+        << "pid_windup_x = " << pid_windup_x << "\n"
+        << "pid_windup_y = " << pid_windup_y << "\n"
+        << "pid_anti_windup_mode = " << pid_anti_windup_mode << "\n"
+        << "pid_backcalc_gain_x = " << pid_backcalc_gain_x << "\n"
+        << "pid_backcalc_gain_y = " << pid_backcalc_gain_y << "\n"
+        << "pid_deadzone = " << pid_deadzone << "\n"
+        << "pid_output_limit_enabled = " << (pid_output_limit_enabled ? "true" : "false") << "\n"
+        << "pid_out_max = " << pid_out_max << "\n"
+        << "pid_smooth_x = " << pid_smooth_x << "\n"
+        << "pid_smooth_y = " << pid_smooth_y << "\n"
 
         << "easynorecoil = " << (easynorecoil ? "true" : "false") << "\n"
         << std::fixed << std::setprecision(1)
@@ -940,6 +1006,9 @@ bool Config::saveConfig(const std::string& filename)
         << "wind_mouse_enabled = " << (wind_mouse_enabled ? "true" : "false") << "\n"
         << "fusion_mode = " << fusion_mode << "\n"
         << "human_mouse_sensitivity = " << human_mouse_sensitivity << "\n"
+        << "aim_trigger_mode = " << aim_trigger_mode << "\n"
+        << "aim_timed_duration_ms = " << aim_timed_duration_ms << "\n"
+        << "inference_idle_throttle = " << (inference_idle_throttle ? "true" : "false") << "\n"
         << "wind_G = " << wind_G << "\n"
         << "wind_W = " << wind_W << "\n"
         << "wind_M = " << wind_M << "\n"

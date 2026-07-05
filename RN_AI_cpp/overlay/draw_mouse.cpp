@@ -9,6 +9,12 @@
 #include "rn_ai_cpp.h"
 #include "include/other_tools.h"
 #include "kmbox_net/picture.h"
+#include "async_logger.h"
+
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <share.h>
 
 int prev_fovX = config.fovX;
 int prev_fovY = config.fovY;
@@ -192,6 +198,127 @@ static void draw_smoothing_kalman_demo_canvas()
         "W=Raw  R=Kalman  G=Smoothed");
 }
 
+// PID 跟踪可视化：目标沿圆周匀速滑动，PID 控制光标追，画误差曲线 + P/I/D 项。
+// 参数绑定 config.pid_*（滑条变化时重配 + reset）。既是调参工具也是可视回归。
+// 红点用连续滑动而非瞬移，避免 D 项对阶跃的放大爆炸。
+static void draw_pid_demo_canvas()
+{
+    ImVec2 canvas_sz(220, 220);
+    ImGui::InvisibleButton("##pid_canvas", canvas_sz);
+    ImVec2 p0 = ImGui::GetItemRectMin();
+    ImVec2 p1 = ImGui::GetItemRectMax();
+    ImVec2 center{ (p0.x + p1.x) * 0.5f, (p0.y + p1.y) * 0.5f };
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p0, p1, IM_COL32(25, 25, 25, 255));
+
+    // 静态 PID 实例，参数绑定 config.pid_*（变化时重配 + reset）
+    static DualAxisPID pid;
+    static float s_kpx = -1, s_kpy = -1, s_kix = -1, s_kiy = -1, s_kdx = -1, s_kdy = -1;
+    static float s_wx = -1, s_wy = -1, s_dz = -1, s_bcx = -1, s_bcy = -1, s_out = -1, s_sx = -1, s_sy = -1;
+    static int   s_aw = -1;
+    static bool  s_lim = false;
+    bool ch = (s_kpx != config.pid_kp_x || s_kpy != config.pid_kp_y ||
+               s_kix != config.pid_ki_x || s_kiy != config.pid_ki_y ||
+               s_kdx != config.pid_kd_x || s_kdy != config.pid_kd_y ||
+               s_wx  != config.pid_windup_x || s_wy  != config.pid_windup_y ||
+               s_dz  != config.pid_deadzone || s_aw  != config.pid_anti_windup_mode ||
+               s_bcx != config.pid_backcalc_gain_x || s_bcy != config.pid_backcalc_gain_y ||
+               s_lim != config.pid_output_limit_enabled || s_out != config.pid_out_max ||
+               s_sx != config.pid_smooth_x || s_sy != config.pid_smooth_y);
+    if (ch)
+    {
+        pid.set_pid_params(config.pid_kp_x, config.pid_kp_y, config.pid_ki_x, config.pid_ki_y,
+                           config.pid_kd_x, config.pid_kd_y);
+        pid.set_windup_guard(config.pid_windup_x, config.pid_windup_y);
+        pid.set_anti_windup(config.pid_anti_windup_mode == 1
+                                ? DualAxisPID::AntiWindup::BackCalc
+                                : DualAxisPID::AntiWindup::Freeze,
+                            config.pid_backcalc_gain_x, config.pid_backcalc_gain_y);
+        pid.set_deadzone(config.pid_deadzone);
+        pid.set_smooth_params(config.pid_smooth_x, config.pid_smooth_y, 0.0, 1.0);
+        if (config.pid_output_limit_enabled && config.pid_out_max > 0.0f)
+        {
+            const double lim[2] = { -(double)config.pid_out_max, (double)config.pid_out_max };
+            pid.set_output_limits(lim, lim);
+        }
+        else
+        {
+            pid.set_output_limits(nullptr, nullptr);
+        }
+        pid.reset();
+        s_kpx = config.pid_kp_x; s_kpy = config.pid_kp_y;
+        s_kix = config.pid_ki_x; s_kiy = config.pid_ki_y;
+        s_kdx = config.pid_kd_x; s_kdy = config.pid_kd_y;
+        s_wx = config.pid_windup_x; s_wy = config.pid_windup_y;
+        s_dz = config.pid_deadzone; s_aw = config.pid_anti_windup_mode;
+        s_bcx = config.pid_backcalc_gain_x; s_bcy = config.pid_backcalc_gain_y;
+        s_lim = config.pid_output_limit_enabled; s_out = config.pid_out_max;
+        s_sx = config.pid_smooth_x; s_sy = config.pid_smooth_y;
+    }
+
+    // dt
+    static double last_t = ImGui::GetTime();
+    double now = ImGui::GetTime();
+    double dt = now - last_t;
+    last_t = now;
+    if (dt <= 0.0 || dt > 0.1) dt = 1.0 / 60.0;
+
+    // 目标：沿圆周匀速滑动（照搬 Kalman demo 红点逻辑，避免瞬移触发 D 项爆炸）
+    static double angle = 0.0;
+    angle += dt * 1.0;
+    if (angle > 2.0 * 3.14159265358979323846) angle -= 2.0 * 3.14159265358979323846;
+    const double rad = 70.0;
+    double tx = std::cos(angle) * rad;
+    double ty = std::sin(angle) * rad;
+
+    // 光标（PID 控制下），plant_gain = 1.0
+    static double cx = 0.0, cy = 0.0;
+    double ex = tx - cx, ey = ty - cy;
+    auto out = pid.compute(ex, ey, dt);
+    cx += out.first;
+    cy += out.second;
+
+    // 独立日志文件（不与 fusion.log 共用）：每次进程启动 "w" 截断，
+    // _SH_DENYNO 允许其它进程（含 Read 工具/编辑器）实时读。
+    static FILE* demo_log = nullptr;
+    if (!demo_log) {
+        const char* up = getenv("USERPROFILE");
+        if (up) {
+            char path[260];
+            sprintf_s(path, "%s\\rn_ai\\pid_demo.log", up);
+            demo_log = _fsopen(path, "w", _SH_DENYNO);
+        }
+    }
+    if (demo_log) {
+        fprintf(demo_log, "[pid_demo] ang=%.3f tgt=(%.1f,%.1f) cur=(%.1f,%.1f) err=(%.1f,%.1f) out=(%.2f,%.2f) dt=%.4f\n",
+                angle, tx, ty, cx, cy, ex, ey, out.first, out.second, dt);
+        fflush(demo_log);
+    }
+    // ALOG 兜底：pid_demo.log 一直没生成，先走 fusion.log 拿数据（这路已验证通）
+    ALOG("[pid_demo] ang=%.3f tgt=(%.1f,%.1f) cur=(%.1f,%.1f) err=(%.1f,%.1f) out=(%.2f,%.2f) dt=%.4f",
+         angle, tx, ty, cx, cy, ex, ey, out.first, out.second, dt);
+
+    // 目标（红）、光标（绿）
+    dl->AddCircleFilled(ImVec2(center.x + (float)tx, center.y + (float)ty), 5.0f, IM_COL32(255, 80, 80, 255));
+    dl->AddCircleFilled(ImVec2(center.x + (float)cx, center.y + (float)cy), 4.0f, IM_COL32(80, 255, 80, 255));
+    dl->AddText({ p0.x + 5, p0.y + 5 }, IM_COL32(200, 200, 200, 255), "R=Target  G=PID");
+
+    // 误差曲线（滚动 120 帧）
+    static float err_hist[120];
+    static int err_idx = 0;
+    double err_mag = std::hypot(ex, ey);
+    err_hist[err_idx] = (float)err_mag;
+    err_idx = (err_idx + 1) % 120;
+    char overlay[32];
+    std::snprintf(overlay, sizeof(overlay), "%.1fpx", err_mag);
+    ImGui::Dummy(ImVec2(0, 2));
+    ImGui::PlotLines("##pid_err", err_hist, 120, err_idx, overlay, 0.0f, 150.0f, ImVec2(210, 40));
+
+    // P/I/D 项（X 轴）
+    auto pc = pid.get_components_x();
+    ImGui::Text("P=%.2f  I=%.3f  D=%.2f", pc.p, pc.i, pc.d);
+}
+
 
 void draw_mouse()
 {
@@ -202,6 +329,65 @@ void draw_mouse()
     ImGui::SeparatorText("Mouse Passthrough");
     if (ImGui::SliderFloat("Human Mouse Sensitivity", &config.human_mouse_sensitivity, 0.0f, 1.5f, "%.2f"))
         config.saveConfig();
+
+    ImGui::SeparatorText("Aim Trigger");
+    const char* aim_modes[] = { "Hold (aim while pressed)", "Timed toggle (tap = N ms)", "Shoot (hold left button)" };
+    int aim_m = config.aim_trigger_mode;
+    if (ImGui::Combo("Aim Trigger Mode", &aim_m, aim_modes, IM_ARRAYSIZE(aim_modes))) {
+        config.aim_trigger_mode = aim_m;
+        config.saveConfig();
+    }
+    if (config.aim_trigger_mode == 1) {
+        if (ImGui::SliderInt("Timed Duration (ms)", &config.aim_timed_duration_ms, 100, 5000))
+            config.saveConfig();
+        ImGui::SameLine();
+        ImGui::TextDisabled("(tap=aim, tap again=cancel, hold=until release)");
+    }
+
+    ImGui::SeparatorText("Aim Controller");
+    {
+        const char* ctl[] = { "Sunone (Kalman/Smooth)", "PID" };
+        int c = config.aim_controller;
+        if (ImGui::Combo("Controller", &c, ctl, IM_ARRAYSIZE(ctl)))
+        {
+            config.aim_controller = c;
+            config.saveConfig();
+            input_method_changed.store(true);
+            globalMouseThread->configurePidFromConfig();
+        }
+    }
+    if (config.aim_controller == 1)
+    {
+        bool pc = false;
+        pc |= ImGui::SliderFloat("Kp X", &config.pid_kp_x, 0.0f, 2.0f, "%.3f");
+        pc |= ImGui::SliderFloat("Kp Y", &config.pid_kp_y, 0.0f, 2.0f, "%.3f");
+        pc |= ImGui::SliderFloat("Ki X", &config.pid_ki_x, 0.0f, 0.1f, "%.4f");
+        pc |= ImGui::SliderFloat("Ki Y", &config.pid_ki_y, 0.0f, 0.1f, "%.4f");
+        pc |= ImGui::SliderFloat("Kd X", &config.pid_kd_x, 0.0f, 1.0f, "%.3f");
+        pc |= ImGui::SliderFloat("Kd Y", &config.pid_kd_y, 0.0f, 1.0f, "%.3f");
+        pc |= ImGui::SliderFloat("Windup X", &config.pid_windup_x, 0.0f, 500.0f, "%.1f");
+        pc |= ImGui::SliderFloat("Windup Y", &config.pid_windup_y, 0.0f, 500.0f, "%.1f");
+        pc |= ImGui::SliderFloat("Deadzone", &config.pid_deadzone, 0.0f, 30.0f, "%.1f");
+        const char* aw[] = { "Freeze", "BackCalc" };
+        int awm = config.pid_anti_windup_mode;
+        if (ImGui::Combo("Anti-windup", &awm, aw, IM_ARRAYSIZE(aw))) { config.pid_anti_windup_mode = awm; pc = true; }
+        if (config.pid_anti_windup_mode == 1)
+        {
+            pc |= ImGui::SliderFloat("BackCalc gain X", &config.pid_backcalc_gain_x, 0.0f, 1.0f, "%.3f");
+            pc |= ImGui::SliderFloat("BackCalc gain Y", &config.pid_backcalc_gain_y, 0.0f, 1.0f, "%.3f");
+        }
+        pc |= ImGui::Checkbox("Output limit", &config.pid_output_limit_enabled);
+        if (config.pid_output_limit_enabled)
+            pc |= ImGui::SliderFloat("Out max", &config.pid_out_max, 1.0f, 500.0f, "%.1f");
+        pc |= ImGui::SliderFloat("Smooth X", &config.pid_smooth_x, 0.0f, 1.0f, "%.2f");
+        pc |= ImGui::SliderFloat("Smooth Y", &config.pid_smooth_y, 0.0f, 1.0f, "%.2f");
+        if (pc)
+        {
+            config.saveConfig();
+            globalMouseThread->configurePidFromConfig();
+        }
+        ImGui::TextDisabled("(PID bypasses Kalman/Smoothing/Prediction)");
+    }
 
     ImGui::SliderInt("Smoothness", &config.smoothness, 1, 200, "%d");
     if (ImGui::Checkbox("Enable Smooth Movement", &config.use_smoothing))
@@ -248,7 +434,7 @@ void draw_mouse()
 
     if (ImGui::CollapsingHeader("Demos"))
     {
-        if (ImGui::BeginTable("mouse_demo_table", 2, ImGuiTableFlags_SizingFixedFit))
+        if (ImGui::BeginTable("mouse_demo_table", 3, ImGuiTableFlags_SizingFixedFit))
         {
             ImGui::TableNextColumn();
             ImGui::Text("Smooth + Kalman");
@@ -256,6 +442,9 @@ void draw_mouse()
             ImGui::TableNextColumn();
             ImGui::Text("Visual");
             draw_target_correction_demo_canvas();
+            ImGui::TableNextColumn();
+            ImGui::Text("PID");
+            draw_pid_demo_canvas();
             ImGui::EndTable();
         }
     }
@@ -448,6 +637,10 @@ void draw_mouse()
 
     if (ImGui::CollapsingHeader("Advanced"))
     {
+        ImGui::SeparatorText("Performance");
+        if (ImGui::Checkbox("Idle Throttle (~10 fps when not aiming)", &config.inference_idle_throttle))
+            config.saveConfig();
+
         ImGui::SeparatorText("Auto Shoot");
         ImGui::Checkbox("Auto Shoot", &config.auto_shoot);
         if (config.auto_shoot)

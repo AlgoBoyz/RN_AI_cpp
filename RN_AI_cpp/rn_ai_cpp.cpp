@@ -855,6 +855,15 @@ static void aim_sim_step(AimSimulationState& s, double dtSec, int panelW, int pa
     s.predictedTarget.y = std::clamp(s.predictedTarget.y, 0.0, static_cast<double>(panelH));
     s.lastErrorPx = std::hypot(s.targetPos.x - s.aimPos.x, s.targetPos.y - s.aimPos.y);
 
+    // 采样日志（~10Hz），定位 aim sim 飞的根因
+    static int aim_sim_log_cnt = 0;
+    if (++aim_sim_log_cnt % 10 == 1)
+        ALOG("[aim_sim] t=%.3f tgt=(%.0f,%.0f) aim=(%.0f,%.0f) obs=(%.0f,%.0f) pred=(%.0f,%.0f) move=(%d,%d) err=%.0f fps=%.0f",
+             s.simTimeSec, s.targetPos.x, s.targetPos.y, s.aimPos.x, s.aimPos.y,
+             s.observedTarget.x, s.observedTarget.y,
+             predictedCtrlX, predictedCtrlY, s.lastMoveX, s.lastMoveY, s.lastErrorPx,
+             1.0 / std::max(1e-8, dtSec));
+
     if (config.aim_sim_show_history)
     {
         s.targetTrail.push_back(s.targetPos);

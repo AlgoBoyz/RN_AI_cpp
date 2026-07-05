@@ -13,6 +13,7 @@
 #include "SerialConnection.h"
 #include "keyboard_listener.h"
 #include "mouse.h"
+#include "mouse_input.h"
 #include "keycodes.h"
 #include "rn_ai_cpp.h"
 #include "capture.h"
@@ -111,22 +112,12 @@ void keyboardListener()
     while (!shouldExit)
     {
         // Aiming
-        if (!config.auto_aim)
-        {
-            // Respect only configured targeting keys (from UI/config).
-            bool new_aiming = isAnyKeyPressed(config.button_targeting);
-            {
-                static bool last_aiming = false;
-                if (new_aiming != last_aiming) {
-                    last_aiming = new_aiming;
-                    std::cout << "[Input] button_targeting → "
-                              << (new_aiming ? "PRESSED (aiming ON)" : "RELEASED (aiming OFF)")
-                              << std::endl;
-                }
-            }
-            aiming = new_aiming;
-        }
-        else
+        // NOTE: in fusion/passthrough modes the aim button is captured via
+        // RawInput and `aiming` is driven by moveWorkerLoop (see mouse.cpp),
+        // because GetAsyncKeyState cannot see forwarded buttons. We only set
+        // aiming here for auto_aim mode (always on) and as a fallback when no
+        // mouse input gatherer is active.
+        if (config.auto_aim)
         {
             aiming = true;
             {
@@ -137,30 +128,20 @@ void keyboardListener()
                 }
             }
         }
+        else if (!g_mouse_input)
+        {
+            // Fallback path: no RawInput gatherer, use Win32 async key state.
+            bool new_aiming = isAnyKeyPressed(config.button_targeting);
+            aiming = new_aiming;
+        }
 
         // Respect only configured key lists for shoot/zoom as well.
         {
             bool new_shooting = isAnyKeyPressed(config.button_shoot);
-            {
-                static bool last_shooting = false;
-                if (new_shooting != last_shooting) {
-                    last_shooting = new_shooting;
-                    std::cout << "[Input] button_shoot → "
-                              << (new_shooting ? "PRESSED" : "RELEASED") << std::endl;
-                }
-            }
             shooting = new_shooting;
         }
         {
             bool new_zooming = isAnyKeyPressed(config.button_zoom);
-            {
-                static bool last_zooming = false;
-                if (new_zooming != last_zooming) {
-                    last_zooming = new_zooming;
-                    std::cout << "[Input] button_zoom → "
-                              << (new_zooming ? "PRESSED" : "RELEASED") << std::endl;
-                }
-            }
             zooming = new_zooming;
         }
 

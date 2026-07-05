@@ -5,6 +5,7 @@
     <ClCompile Include="capture\capture.cpp" />
     <ClCompile Include="overlay\overlay.cpp" />
     <ClCompile Include="mouse\mouse.cpp" />
+    <ClCompile Include="mouse\pid_controller.cpp" />
     <ClCompile Include="mouse\SerialConnection.cpp" />
     <ClCompile Include="mouse\AimbotTarget.cpp" />
     <ClCompile Include="tensorrt\nvinf.cpp" />
@@ -65,6 +66,7 @@
     <ClInclude Include="capture\capture.h" />
     <ClInclude Include="overlay\overlay.h" />
     <ClInclude Include="mouse\mouse.h" />
+    <ClInclude Include="mouse\pid_controller.h" />
     <ClInclude Include="mouse\SerialConnection.h" />
     <ClInclude Include="mouse\AimbotTarget.h" />
     <ClInclude Include="tensorrt\nvinf.h" />

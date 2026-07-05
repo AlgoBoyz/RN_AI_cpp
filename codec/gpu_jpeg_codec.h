@@ -19,6 +19,10 @@ public:
     void shutdown();
 
     std::vector<uint8_t> encode(const cv::Mat& bgra_image, int quality = 90);
+
+    // Encode raw BGRA data (no OpenCV dependency)
+    std::vector<uint8_t> encode_raw_bgra(const uint8_t* bgra_data, int width, int height, int stride, int quality = 90);
+
     cv::Mat decode(const std::vector<uint8_t>& jpeg_data);
 
     bool isInitialized() const { return m_initialized; }

@@ -80,6 +80,7 @@ MouseThread::MouseThread(
 
     last_prediction_q = config.prediction_kalman_process_noise;
     last_prediction_r = config.prediction_kalman_measurement_noise;
+    configurePidFromConfig();
     resetAimState();
 
     moveWorker = std::thread(&MouseThread::moveWorkerLoop, this);
@@ -121,6 +122,38 @@ void MouseThread::updateConfig(
     last_kalman_q = config.kalman_process_noise;
     last_kalman_r = config.kalman_measurement_noise;
 
+    configurePidFromConfig();
+}
+
+// 从全局 config 同步 PID 参数到 _pid。仅设参数，不动状态。
+// 在构造、updateConfig、UI 调参后调用。
+void MouseThread::configurePidFromConfig()
+{
+    std::lock_guard<std::mutex> lg(input_method_mutex);
+
+    _pid.set_pid_params(
+        config.pid_kp_x, config.pid_kp_y,
+        config.pid_ki_x, config.pid_ki_y,
+        config.pid_kd_x, config.pid_kd_y);
+    _pid.set_windup_guard(config.pid_windup_x, config.pid_windup_y);
+    _pid.set_anti_windup(
+        config.pid_anti_windup_mode == 1
+            ? DualAxisPID::AntiWindup::BackCalc
+            : DualAxisPID::AntiWindup::Freeze,
+        config.pid_backcalc_gain_x, config.pid_backcalc_gain_y);
+    _pid.set_deadzone(config.pid_deadzone);
+    _pid.set_smooth_params(config.pid_smooth_x, config.pid_smooth_y, 0.0, 1.0);
+
+    if (config.pid_output_limit_enabled && config.pid_out_max > 0.0f)
+    {
+        const double lim_x[2] = { -config.pid_out_max, config.pid_out_max };
+        const double lim_y[2] = { -config.pid_out_max, config.pid_out_max };
+        _pid.set_output_limits(lim_x, lim_y);
+    }
+    else
+    {
+        _pid.set_output_limits(nullptr, nullptr);
+    }
 }
 
 MouseThread::~MouseThread()
@@ -149,6 +182,14 @@ void MouseThread::moveWorkerLoop()
     int fwd_human_dx = 0, fwd_human_dy = 0;
     int fwd_ai_dx = 0, fwd_ai_dy = 0;
     auto last_stat_time = std::chrono::steady_clock::now();
+    // Previous frame's forwarded button state — used to force-send releases
+    uint8_t last_fwd_buttons = 0;
+
+    // Aim trigger state machine (mode 1 = timed toggle)
+    enum class AimState { Idle, Timed, Held };
+    AimState aim_state = AimState::Idle;
+    std::chrono::steady_clock::time_point aim_deadline{};
+    bool prev_aim_held = false;
     while (!workerStop)
     {
         std::unique_lock ul(queueMtx);
@@ -164,18 +205,97 @@ void MouseThread::moveWorkerLoop()
             human_buttons = raw.buttons; human_wheel = raw.wheel;
         }
 
-        // Drive `aiming` from the physical right-button state captured via
-        // RawInput. GetAsyncKeyState cannot see the button once the mouse is
-        // forwarded to hardware, so the idle capture throttle and target
-        // selection must key off this instead.
-        const bool right_held = (human_buttons & 0x02) != 0;
-        if (right_held != aiming.load())
-            aiming.store(right_held);
+        // Drive `aiming` from the physical button state captured via RawInput,
+        // keyed off config.button_targeting (so the aim key is configurable).
+        // GetAsyncKeyState cannot see the button once the mouse is forwarded
+        // to hardware, so the idle capture throttle and target selection must
+        // key off the RawInput button bits instead.
+        auto button_name_to_bit = [](const std::string& name) -> uint8_t {
+            if (name == "LeftMouseButton")   return 0x01;
+            if (name == "RightMouseButton")  return 0x02;
+            if (name == "MiddleMouseButton") return 0x04;
+            if (name == "X1MouseButton")     return 0x08;
+            if (name == "X2MouseButton")     return 0x10;
+            return 0;
+        };
+        // Choose aim button source per trigger mode.
+        //   0=targeting-hold, 1=targeting-timed, 2=shoot-hold
+        const auto& aim_source = (config.aim_trigger_mode == 2)
+            ? config.button_shoot : config.button_targeting;
+        uint8_t aim_mask = 0;
+        for (const auto& name : aim_source)
+            aim_mask |= button_name_to_bit(name);
+        if (aim_mask == 0) aim_mask = 0x02;  // fallback: right button
+        const bool aim_held = (human_buttons & aim_mask) != 0;
+
+        // Aim trigger state machine.
+        //   mode 0 (hold):    aiming = aim_held
+        //   mode 1 (timed):   tap -> aim for aim_timed_duration_ms (tap again
+        //                     in window cancels); if still held when the
+        //                     window expires, switch to hold-until-release.
+        //   mode 2 (shoot):   aiming = aim_held (hold left button to aim)
+        bool aim_active = false;
+        const int aim_mode = config.aim_trigger_mode;
+        if (aim_mode == 1) {
+            auto now = std::chrono::steady_clock::now();
+            bool press_edge = aim_held && !prev_aim_held;
+            AimState prev_state = aim_state;
+
+            if (aim_state == AimState::Idle) {
+                if (press_edge) {
+                    aim_state = AimState::Timed;
+                    aim_deadline = now + std::chrono::milliseconds(
+                        std::max(1, config.aim_timed_duration_ms));
+                }
+            } else if (aim_state == AimState::Timed) {
+                if (press_edge) {
+                    aim_state = AimState::Idle;
+                } else if (now >= aim_deadline) {
+                    if (aim_held) aim_state = AimState::Held;
+                    else          aim_state = AimState::Idle;
+                }
+            } else if (aim_state == AimState::Held) {
+                if (!aim_held) aim_state = AimState::Idle;
+            }
+
+            aim_active = (aim_state != AimState::Idle);
+
+            // Log state transitions to console
+            if (aim_state != prev_state) {
+                const char* to_s = (aim_state == AimState::Idle) ? "OFF"
+                    : (aim_state == AimState::Timed) ? "TIMED" : "HOLD";
+                if (aim_state == AimState::Timed) {
+                    int dur_ms = std::max(1, config.aim_timed_duration_ms);
+                    printf("[Aim] %s (timer=%dms)\n", to_s, dur_ms);
+                } else {
+                    printf("[Aim] %s\n", to_s);
+                }
+            }
+
+            prev_aim_held = aim_held;
+        } else {
+            // Mode 0 (targeting-hold) or mode 2 (shoot-hold)
+            const char* label = (aim_mode == 2) ? "ON (shoot)" : "ON (hold)";
+            if (aim_held != prev_aim_held) {
+                printf("[Aim] %s\n", aim_held ? label : "OFF");
+                prev_aim_held = aim_held;
+            }
+            aim_active = aim_held;
+        }
+
+        if (aim_active != aiming.load())
+            aiming.store(aim_active);
+
+        // 采样 aim 状态机原始值（~5Hz），定位 aiming 是否抖动/卡死。
+        // 怀疑点：button_targeting 改成 X2 后，RawInput 按钮位/掩码是否对得上。
+        if (tick_count % 200 == 1)
+            ALOG("[aim_fsm] mode=%d btns=0x%02X mask=0x%02X held=%d active=%d aiming=%d",
+                 aim_mode, human_buttons, aim_mask, (int)aim_held, (int)aim_active, (int)aiming.load());
 
         // Center the cursor occasionally so it never hits screen edges, but
         // only when not actively aiming and at most ~5 Hz. Re-centering every
         // tick (1 kHz) was a heavy system call and the main worker bottleneck.
-        if (config.fusion_mode != 1 && !right_held) {
+        if (config.fusion_mode != 1 && !aim_active) {
             auto now = std::chrono::steady_clock::now();
             if (now - last_center_time >= std::chrono::milliseconds(200)) {
                 last_center_time = now;
@@ -197,10 +317,14 @@ void MouseThread::moveWorkerLoop()
         //     Apply human mouse sensitivity multiplier to dx/dy. Sub-pixel
         //     remainder is accumulated in human_overflow_* and carried to the
         //     next tick so low sensitivities do not silently drop movement.
+        //     A button-state CHANGE must always be forwarded (even when dx/dy
+        //     are zero), otherwise a release (buttons -> 0x00) is dropped and
+        //     the receiver sees a stuck hold -> double-click / release fails.
+        const bool btn_changed = (human_buttons != last_fwd_buttons);
         int fwd_dx = 0, fwd_dy = 0;
         if (correction) {
             // Pure-AI mode: forward buttons/wheel only, discard human movement
-            if (human_buttons || human_wheel)
+            if (btn_changed || human_buttons || human_wheel)
                 sendMovementToDriver(0, 0, human_buttons, (int8_t)human_wheel, 0);
         } else {
             // Bridge / Fusion: forward full human movement first
@@ -209,9 +333,10 @@ void MouseThread::moveWorkerLoop()
                                    human_overflow_x, human_overflow_y);
             fwd_dx = static_cast<int>(fwd.first);
             fwd_dy = static_cast<int>(fwd.second);
-            if (fwd_dx || fwd_dy || human_buttons || human_wheel)
+            if (btn_changed || fwd_dx || fwd_dy || human_buttons || human_wheel)
                 sendMovementToDriver(fwd_dx, fwd_dy, human_buttons, (int8_t)human_wheel, 0);
         }
+        last_fwd_buttons = human_buttons;
 
         // --- 2) Then forward AI correction steps ONE BY ONE (no dropping) ---
         //     wind splits a large delta into many small steps; sending each
@@ -377,6 +502,8 @@ void MouseThread::resetSmoothingState()
     track_prev_y = 0.0;
     track_time = std::chrono::steady_clock::time_point{};
     last_tracking_mode = -1;
+
+    _pid.reset();
 }
 
 void MouseThread::resetAimState()
@@ -1080,11 +1207,40 @@ std::pair<int, int> MouseThread::moveWithKalmanAndSmoothing(double targetX, doub
     return { static_cast<int>(step.first), static_cast<int>(step.second) };
 }
 
+// PID 控制器分支：吃原始屏幕误差（不过预测/Kalman），输出即鼠标移动计数。
+// 忠实移植 Python RN_AI/core/aiming.py:524-573 的 PID 路径。
+std::pair<int, int> MouseThread::moveWithPid(double targetX, double targetY, double fps)
+{
+    double ex = targetX - center_x;
+    double ey = targetY - center_y;
+    double dt = 1.0 / std::max(fps, 1.0);
+
+    auto out = _pid.compute(ex, ey, dt);
+    auto px = _pid.get_components_x();
+    auto py = _pid.get_components_y();
+    auto step = addOverflow(out.first, out.second, move_overflow_x, move_overflow_y);
+    // 怀疑点：dt=1/fps，若 fps 异常小 → dt 大 → D 项爆炸发散。
+    ALOG("[moveWithPid] err=(%.1f,%.1f) dt=%.4f fps=%.0f P=(%.2f,%.2f) I=(%.3f,%.3f) D=(%.2f,%.2f) raw=(%.2f,%.2f) step=(%d,%d)",
+         ex, ey, dt, fps, px.p, py.p, px.i, py.i, px.d, py.d, out.first, out.second,
+         (int)step.first, (int)step.second);
+    return { static_cast<int>(step.first), static_cast<int>(step.second) };
+}
+
 std::pair<int, int> MouseThread::computeMove(
     double targetX, double targetY, double fps, double infer_latency_ms,
     double camera_dx, double camera_dy)
 {
     markTargetSeen();
+
+    // PID 早出：旁路整条预测/滤波/平滑链，吃原始屏幕误差。
+    if (config.aim_controller == 1)
+    {
+        auto d = moveWithPid(targetX, targetY, fps);
+        ALOG("[computeMove] target=(%.0f,%.0f) branch=pid err=(%.1f,%.1f) out=(%d,%d) fps=%.0f",
+             targetX, targetY, targetX - center_x, targetY - center_y, d.first, d.second, fps);
+        return d;
+    }
+
     ensurePredictionKalman(config.prediction_kalman_process_noise,
         config.prediction_kalman_measurement_noise);
     ensureKalman(config.kalman_process_noise, config.kalman_measurement_noise);
@@ -1139,27 +1295,27 @@ std::pair<int, int> MouseThread::computeMove(
 
     if (use_kalman && use_smoothing) {
         auto d = moveWithKalmanAndSmoothing(predX, predY, fps);
-        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) branch=kalman+smooth raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
-             targetX, targetY, predX, predY, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
+        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) center=(%.0f,%.0f) err=(%.1f,%.1f) branch=kalman+smooth raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
+             targetX, targetY, predX, predY, center_x, center_y, targetX - center_x, targetY - center_y, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
         return d;
     }
     if (use_kalman) {
         auto d = moveWithKalman(predX, predY, fps);
-        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) branch=kalman raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
-             targetX, targetY, predX, predY, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
+        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) center=(%.0f,%.0f) err=(%.1f,%.1f) branch=kalman raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
+             targetX, targetY, predX, predY, center_x, center_y, targetX - center_x, targetY - center_y, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
         return d;
     }
     if (use_smoothing) {
         auto d = moveWithSmoothing(predX, predY, fps);
-        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) branch=smooth raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
-             targetX, targetY, predX, predY, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
+        ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) center=(%.0f,%.0f) err=(%.1f,%.1f) branch=smooth raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
+             targetX, targetY, predX, predY, center_x, center_y, targetX - center_x, targetY - center_y, (double)d.first, (double)d.second, d.first, d.second, fps, infer_latency_ms);
         return d;
     }
 
     auto mv = calc_movement(predX, predY);
     auto out = std::make_pair(static_cast<int>(std::round(mv.first)), static_cast<int>(std::round(mv.second)));
-    ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) branch=raw raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
-         targetX, targetY, predX, predY, mv.first, mv.second, out.first, out.second, fps, infer_latency_ms);
+    ALOG("[computeMove] target=(%.0f,%.0f) pred=(%.1f,%.1f) center=(%.0f,%.0f) err=(%.1f,%.1f) branch=raw raw=(%.3f,%.3f) out=(%d,%d) fps=%.0f infer=%.1f",
+         targetX, targetY, predX, predY, center_x, center_y, targetX - center_x, targetY - center_y, mv.first, mv.second, out.first, out.second, fps, infer_latency_ms);
     return out;
 }
 
@@ -1243,6 +1399,12 @@ void MouseThread::moveMouse(const AimbotTarget& target)
     else if (config.backend != "COLOR")
         infer_ms = trt_detector.lastInferenceTime.count();
 #endif
+
+    // 怀疑点：检测上游 target 本身是否在飞（每 50 帧采样一次）。
+    static int mm_count = 0;
+    if (++mm_count % 50 == 1)
+        ALOG("[moveMouse] pivot=(%.0f,%.0f) fps=%.0f infer=%.1f",
+             target.pivotX, target.pivotY, fps, infer_ms);
 
     auto delta = computeMove(target.pivotX, target.pivotY, fps, infer_ms, 0.0, 0.0);
     if (delta.first || delta.second)
