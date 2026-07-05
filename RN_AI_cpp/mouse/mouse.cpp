@@ -976,6 +976,40 @@ void MouseThread::releaseMouse()
     }
 }
 
+void MouseThread::pressMouseSideButton(int button)
+{
+    // button: 0 = XButton1, 1 = XButton2
+    // Mouse button numbering: 0=Left, 1=Right, 2=Middle, 3=XButton1, 4=XButton2
+    int dev_button = button + 3;
+
+    std::lock_guard<std::mutex> lock(input_method_mutex);
+
+    if (makcu) {
+        makcu->press(dev_button);
+        makcu->release(dev_button);
+    } else if (kmbox) {
+        kmbox->press(dev_button);
+        kmbox->release(dev_button);
+    } else if (kmbox_net) {
+        kmbox_net->keyDown(dev_button);
+        kmbox_net->keyUp(dev_button);
+    } else if (serial) {
+        serial->press();
+        serial->release();
+    } else {
+        // Win32 SendInput fallback
+        DWORD xbutton = (button == 0) ? XBUTTON1 : XBUTTON2;
+        INPUT input = {};
+        input.type = INPUT_MOUSE;
+        input.mi.dwFlags = MOUSEEVENTF_XDOWN;
+        input.mi.mouseData = xbutton;
+        SendInput(1, &input, sizeof(INPUT));
+        input.mi.dwFlags = MOUSEEVENTF_XUP;
+        input.mi.mouseData = xbutton;
+        SendInput(1, &input, sizeof(INPUT));
+    }
+}
+
 void MouseThread::resetPrediction()
 {
     resetAimState();

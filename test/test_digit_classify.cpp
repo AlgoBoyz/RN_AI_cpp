@@ -41,53 +41,7 @@ constexpr int TENS_X = 312, TENS_Y = 13, TENS_W = 37, TENS_H = 47;
 constexpr int ONES_X = 351, ONES_Y = 13, ONES_W = 34, ONES_H = 48;
 constexpr int CNN_SIZE = 28;
 
-// ── ONNX 分类器 ─────────────────────────────────────────────────────────
-class DigitClassifier {
-public:
-    DigitClassifier() {
-        Ort::SessionOptions opts;
-        opts.SetIntraOpNumThreads(1);
-        opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-        session_ = std::make_unique<Ort::Session>(env_, L"models/digit_classifier.onnx", opts);
-
-        Ort::AllocatorWithDefaultOptions alloc;
-        input_name_ = session_->GetInputNameAllocated(0, alloc).get();
-        output_name_ = session_->GetOutputNameAllocated(0, alloc).get();
-        printf("[CNN] Loaded, input='%s' output='%s'\n", input_name_.c_str(), output_name_.c_str());
-    }
-
-    int classify(const cv::Mat& gray_roi) {
-        if (gray_roi.empty()) return -1;
-
-        cv::Mat resized;
-        cv::resize(gray_roi, resized, cv::Size(CNN_SIZE, CNN_SIZE), 0, 0, cv::INTER_AREA);
-        resized.convertTo(resized, CV_32F, 1.0 / 127.5, -1.0);
-
-        std::vector<float> input_data(CNN_SIZE * CNN_SIZE);
-        memcpy(input_data.data(), resized.ptr<float>(0), input_data.size() * sizeof(float));
-
-        std::vector<int64_t> shape = { 1, 1, CNN_SIZE, CNN_SIZE };
-        auto mem = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-        auto tensor = Ort::Value::CreateTensor<float>(mem, input_data.data(),
-                         input_data.size(), shape.data(), shape.size());
-
-        const char* in = input_name_.c_str();
-        const char* out = output_name_.c_str();
-        auto outputs = session_->Run(Ort::RunOptions{nullptr}, &in, &tensor, 1, &out, 1);
-        float* probs = outputs[0].GetTensorMutableData<float>();
-
-        int best = 0;
-        for (int i = 1; i < 10; i++)
-            if (probs[i] > probs[best]) best = i;
-        return best;
-    }
-
-private:
-    Ort::Env env_{ ORT_LOGGING_LEVEL_WARNING, "test" };
-    std::unique_ptr<Ort::Session> session_;
-    std::string input_name_;
-    std::string output_name_;
-};
+#include "../RN_AI_cpp/digit/digit_classifier.h"
 
 // ── 主函数 ───────────────────────────────────────────────────────────────
 int main() {
@@ -108,7 +62,7 @@ int main() {
     for (int d = 0; d < 10; d++)
         fs::create_directories(fs::path(out_dir) / std::to_string(d));
 
-    DigitClassifier cnn;
+    DigitClassifier cnn(L"models/digit_classifier.onnx");
 
     // 收集所有 _ammo_ 图片
     std::vector<fs::path> files;

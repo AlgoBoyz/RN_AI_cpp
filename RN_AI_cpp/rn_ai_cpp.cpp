@@ -83,6 +83,8 @@ std::atomic<bool> input_method_changed(false);
 std::atomic<bool> zooming(false);
 std::atomic<bool> shooting(false);
 std::atomic<bool> triggerbot_button(false);
+std::atomic<int> g_ammo_count(-1);
+std::atomic<uint64_t> g_ammo_capture_ts(0);
 
 Game_overlay* gameOverlayPtr = nullptr;
 
@@ -1205,6 +1207,23 @@ void GameOverlayThreadFunction()
             }
         }
 
+        // Ammo counter display
+        if (config.ammo_enabled) {
+            int ammo = g_ammo_count.load(std::memory_order_relaxed);
+            float ammoX = static_cast<float>(monLeft + config.ammo_display_x);
+            float ammoY = static_cast<float>(monTop + config.ammo_display_y);
+            wchar_t ammoLine[32];
+            if (ammo >= 0)
+                swprintf_s(ammoLine, L"Ammo: %d", ammo);
+            else
+                swprintf_s(ammoLine, L"Ammo: --");
+            gameOverlayPtr->AddText(ammoX, ammoY, ammoLine, config.ammo_display_text_size,
+                ARGB((uint8_t)config.ammo_display_color_a,
+                     (uint8_t)config.ammo_display_color_r,
+                     (uint8_t)config.ammo_display_color_g,
+                     (uint8_t)config.ammo_display_color_b));
+        }
+
         if (aimSimEnabled)
         {
             draw_aim_sim_panel(gameOverlayPtr, aimSimState, sw, sh, monLeft, monTop);
@@ -2278,6 +2297,27 @@ void mouseThreadFunction(MouseThread& mouseThread)
         else
         {
             mouseThread.releaseMouse();
+        }
+
+        // ── Auto reload ──
+        if (config.auto_reload && config.ammo_enabled) {
+            static auto last_reload = std::chrono::steady_clock::now() - std::chrono::milliseconds(1000);
+            int ammo = g_ammo_count.load(std::memory_order_relaxed);
+            if (ammo >= 0 && ammo <= config.auto_reload_threshold) {
+                auto now = std::chrono::steady_clock::now();
+                int cooldown_ms = std::max(50, config.auto_reload_cooldown_ms);
+                if (now - last_reload >= std::chrono::milliseconds(cooldown_ms)) {
+                    uint64_t cap_ts = g_ammo_capture_ts.load(std::memory_order_relaxed);
+                    auto now_sys_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+                    auto diff_ms = (long long)(now_sys_ms - (long long)cap_ts);
+                    ALOG("[AutoReload] FIRE ammo=%d classify_ts=%llu fire_ts=%llu diff=%lldms",
+                         ammo, cap_ts, now_sys_ms, diff_ms);
+                    // Send mouse side button
+                    mouseThread.pressMouseSideButton(config.auto_reload_button);
+                    last_reload = now;
+                }
+            }
         }
 
         handleEasyNoRecoil(mouseThread);

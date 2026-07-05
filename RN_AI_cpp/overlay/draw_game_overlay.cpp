@@ -402,6 +402,59 @@ void draw_game_overlay_settings()
         OverlayUI::EndSection();
     }
 
+    // ── Ammo Counter ──
+    if (OverlayUI::BeginSection("Ammo Counter", "game_overlay_section_ammo"))
+    {
+        bool ammo_changed = false;
+        if (ImGui::Checkbox("Enable Ammo Display", &config.ammo_enabled))
+            ammo_changed = true;
+
+        ImGui::SliderInt("Display X", &config.ammo_display_x, 0, 3000);
+        if (ImGui::IsItemDeactivatedAfterEdit()) ammo_changed = true;
+        ImGui::SliderInt("Display Y", &config.ammo_display_y, 0, 2000);
+        if (ImGui::IsItemDeactivatedAfterEdit()) ammo_changed = true;
+        ImGui::SliderFloat("Text Size", &config.ammo_display_text_size, 8.0f, 72.0f, "%.0f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) ammo_changed = true;
+
+        if (ImGui::CollapsingHeader("Text Color"))
+        {
+            ImGui::SliderInt("R##ammo_r", &config.ammo_display_color_r, 0, 255);
+            if (ImGui::IsItemDeactivatedAfterEdit()) ammo_changed = true;
+            ImGui::SliderInt("G##ammo_g", &config.ammo_display_color_g, 0, 255);
+            if (ImGui::IsItemDeactivatedAfterEdit()) ammo_changed = true;
+            ImGui::SliderInt("B##ammo_b", &config.ammo_display_color_b, 0, 255);
+            if (ImGui::IsItemDeactivatedAfterEdit()) ammo_changed = true;
+            ImGui::SliderInt("A##ammo_a", &config.ammo_display_color_a, 0, 255);
+            if (ImGui::IsItemDeactivatedAfterEdit()) ammo_changed = true;
+        }
+
+        if (ammo_changed) OverlayConfig_MarkDirty();
+        OverlayUI::EndSection();
+    }
+
+    // ── Auto Reload ──
+    if (OverlayUI::BeginSection("Auto Reload", "game_overlay_section_auto_reload"))
+    {
+        bool reload_changed = false;
+        if (ImGui::Checkbox("Enable Auto Reload", &config.auto_reload))
+            reload_changed = true;
+
+        ImGui::SliderInt("Threshold", &config.auto_reload_threshold, 1, 30);
+        if (ImGui::IsItemDeactivatedAfterEdit()) reload_changed = true;
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Reload when ammo <= this value");
+
+        ImGui::SliderInt("Cooldown (ms)", &config.auto_reload_cooldown_ms, 50, 3000);
+        if (ImGui::IsItemDeactivatedAfterEdit()) reload_changed = true;
+
+        ImGui::Combo("Side Button", &config.auto_reload_button,
+                     "XButton1 (Back)\0XButton2 (Forward)\0\0");
+        if (ImGui::IsItemDeactivatedAfterEdit()) reload_changed = true;
+
+        if (reload_changed) OverlayConfig_MarkDirty();
+        OverlayUI::EndSection();
+    }
+
     if (!g_iconLastError.empty())
     {
         if (OverlayUI::BeginSection("Errors", "game_overlay_section_errors"))

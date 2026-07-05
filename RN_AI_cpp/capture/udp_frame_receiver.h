@@ -2,6 +2,7 @@
 
 #include "capture.h"
 #include "udp_wire_protocol.h"
+#include "../digit/digit_classifier.h"
 #ifdef USE_CUDA
 #include "../codec/gpu_jpeg_codec.h"
 #endif
@@ -38,7 +39,11 @@ public:
     // Returns nullptr if no frame has been received yet.
     const DecodedMultiRegion* GetLastMultiRegion() const { return &last_mr_frame_; }
 
+    // Latest recognized ammo count, or -1 if not available.
+    int GetLatestAmmoCount() const { return latest_ammo_count_.load(std::memory_order_relaxed); }
+
 private:
+    void InitDigitClassifier();
     void ReceiveThread();
 
     int port_;
@@ -59,6 +64,12 @@ private:
 #ifdef USE_CUDA
     std::unique_ptr<GpuJpegCodec> gpu_codec_;
 #endif
+
+    // Digit recognition
+    std::unique_ptr<DigitClassifier> digit_classifier_;
+    std::atomic<int> latest_ammo_count_{-1};
+    int ammo_classify_counter_ = 0;
+    bool digit_classifier_init_attempted_ = false;
 
     static const int MAX_QUEUE_SIZE = 5;
     static const int FRAGMENT_TIMEOUT_MS = 200;

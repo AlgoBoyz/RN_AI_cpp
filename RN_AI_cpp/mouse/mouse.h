@@ -234,6 +234,7 @@ public:
     void moveMouse(const AimbotTarget& target);
     void pressMouse(const AimbotTarget& target, float scope_multiplier = -1.0f);
     void releaseMouse();
+    void pressMouseSideButton(int button);  // 0=XButton1, 1=XButton2
     void resetPrediction();
     void checkAndResetPredictions();
     bool check_target_in_scope(double x, double y,

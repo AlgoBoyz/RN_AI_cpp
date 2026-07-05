@@ -1,4 +1,6 @@
 #include "udp_frame_receiver.h"
+#include "../config/config.h"
+#include "../mouse/async_logger.h"
 #include <iostream>
 #include <mutex>
 
@@ -261,5 +263,73 @@ cv::Mat UdpFrameReceiver::GetNextFrameCpu() {
     frame = cv::imdecode(jpeg0, cv::IMREAD_COLOR);
 #endif
 
+    // ── Ammo digit recognition (region 1) ──
+    extern Config config;
+    static int ammo_log_counter = 0;
+    if (config.ammo_enabled) {
+        if (!digit_classifier_init_attempted_) {
+            InitDigitClassifier();
+            digit_classifier_init_attempted_ = true;
+        }
+        if (!digit_classifier_ || !digit_classifier_->isLoaded()) {
+            if (ammo_log_counter++ % 600 == 0)
+                ALOG("[Ammo] Classifier not loaded or init failed");
+        } else {
+            ammo_classify_counter_++;
+            if (ammo_classify_counter_ >= config.ammo_classify_every_n) {
+                ammo_classify_counter_ = 0;
+                if (last_mr_frame_.mr_header.num_regions <= 1) {
+                    if (ammo_log_counter++ % 600 == 0)
+                        ALOG("[Ammo] No region 1 in frame (num_regions=%u)",
+                               last_mr_frame_.mr_header.num_regions);
+                } else if (last_mr_frame_.region_size[1] == 0) {
+                    if (ammo_log_counter++ % 600 == 0)
+                        ALOG("[Ammo] Region 1 has zero size");
+                } else {
+                    std::vector<uint8_t> jpeg1(
+                        last_mr_frame_.region_data[1],
+                        last_mr_frame_.region_data[1] + last_mr_frame_.region_size[1]);
+                    cv::Mat region1 = cv::imdecode(jpeg1, cv::IMREAD_COLOR);
+                    if (region1.empty()) {
+                        if (ammo_log_counter++ % 600 == 0)
+                            ALOG("[Ammo] Region 1 JPEG decode failed (size=%u)",
+                                   last_mr_frame_.region_size[1]);
+                    } else {
+                        int ammo = digit_classifier_->detect(region1,
+                            config.ammo_tens_x, config.ammo_tens_y, config.ammo_tens_w, config.ammo_tens_h,
+                            config.ammo_ones_x, config.ammo_ones_y, config.ammo_ones_w, config.ammo_ones_h,
+                            config.ammo_blank_stddev_threshold);
+                        latest_ammo_count_.store(ammo, std::memory_order_relaxed);
+                        extern std::atomic<int> g_ammo_count;
+                        extern std::atomic<uint64_t> g_ammo_capture_ts;
+                        g_ammo_count.store(ammo, std::memory_order_relaxed);
+                        auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch()).count();
+                        g_ammo_capture_ts.store(now_ms, std::memory_order_relaxed);
+                        if (ammo_log_counter++ % 300 == 0)
+                            ALOG("[Ammo] Detected=%d (region1=%dx%d)", ammo, region1.cols, region1.rows);
+                        static auto last_fps_log = std::chrono::steady_clock::now();
+                        static int fps_count = 0;
+                        fps_count++;
+                        auto now = std::chrono::steady_clock::now();
+                        if (now - last_fps_log > std::chrono::seconds(5)) {
+                            ALOG("[Ammo] classify FPS: %.1f", fps_count / 5.0f);
+                            fps_count = 0;
+                            last_fps_log = now;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     return frame;
+}
+
+void UdpFrameReceiver::InitDigitClassifier() {
+    try {
+        digit_classifier_ = std::make_unique<DigitClassifier>(L"models/digit_classifier.onnx");
+    } catch (const std::exception& e) {
+        fprintf(stderr, "[UdpFrameReceiver] Digit classifier init failed: %s\n", e.what());
+    }
 }

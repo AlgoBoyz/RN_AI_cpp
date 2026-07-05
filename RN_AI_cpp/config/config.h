@@ -162,6 +162,22 @@ public:
     float bScope_multiplier;
     float triggerbot_bScope_multiplier;
 
+    // Ammo counter digit recognition
+    bool ammo_enabled;
+    int ammo_tens_x, ammo_tens_y, ammo_tens_w, ammo_tens_h;
+    int ammo_ones_x, ammo_ones_y, ammo_ones_w, ammo_ones_h;
+    float ammo_blank_stddev_threshold;
+    int ammo_display_x, ammo_display_y;
+    float ammo_display_text_size;
+    int ammo_display_color_r, ammo_display_color_g, ammo_display_color_b, ammo_display_color_a;
+    int ammo_classify_every_n;
+
+    // Auto reload
+    bool auto_reload;
+    int auto_reload_threshold;
+    int auto_reload_cooldown_ms;
+    int auto_reload_button;  // 0=XButton1, 1=XButton2
+
     // AI
     std::string backend;
     int dml_device_id;

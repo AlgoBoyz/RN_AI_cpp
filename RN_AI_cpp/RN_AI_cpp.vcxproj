@@ -27,6 +27,7 @@
     <ClCompile Include="capture\duplication_api_capture.cpp" />
     <ClCompile Include="capture\udp_frame_receiver.cpp" />
     <ClCompile Include="capture\udp_wire_protocol.cpp" />
+    <ClCompile Include="digit\digit_classifier.cpp" />
     <ClCompile Include="capture\virtual_camera.cpp" />
     <ClCompile Include="capture\winrt_capture.cpp" />
     <ClCompile Include="..\codec\gpu_jpeg_codec.cpp">
@@ -140,6 +141,7 @@
     <ClInclude Include="capture\duplication_api_capture.h" />
     <ClInclude Include="capture\udp_frame_receiver.h" />
     <ClInclude Include="capture\udp_wire_protocol.h" />
+    <ClInclude Include="digit\digit_classifier.h" />
     <ClInclude Include="capture\virtual_camera.h" />
     <ClInclude Include="capture\winrt_capture.h" />
     <ClInclude Include="codec\gpu_jpeg_codec.h" />

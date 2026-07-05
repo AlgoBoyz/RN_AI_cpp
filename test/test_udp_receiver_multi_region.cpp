@@ -1,18 +1,20 @@
 /**
  * test_udp_receiver_multi_region.cpp
  *
- * 从真实 frame_sender 接收多区域 UDP 帧，在弹药区域(region 1)中识别数字，
- * 将识别结果用白底黑字绘制在图像上并保存到 debug 目录。
+ * 从真实 frame_sender 接收多区域 UDP 帧，在弹药区域(region 1)中用 CNN 识别数字。
+ * 将原始区域图像保存到 debug 目录（文件名含识别结果）。
  *
- * 弹药数字区域在原图中的裁剪坐标:
- *   x=305  y=7  w=85  h=54
- * （相对于 region 1 图像的左上角）
+ * 数字识别: ONNX CNN 模型 (models/digit_classifier.onnx)
+ *   十分位: x=312  y=13  w=37  h=47  (相对 region 1)
+ *   个分位: x=351  y=13  w=34  h=48
  *
  * 编译:
  *   cl /std:c++17 /EHsc /utf-8 /I. /Ivendor\opencv\install\include
+ *       /Ipackages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\include
  *       test\test_udp_receiver_multi_region.cpp
  *       RN_AI_cpp\capture\udp_wire_protocol.cpp
  *       ws2_32.lib vendor\opencv\install\x64\vc17\lib\opencv_world4100.lib
+ *       packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\runtimes\win-x64\native\onnxruntime.lib
  *       /Fe:test_udp_receiver_multi_region.exe
  *
  * 运行:
@@ -25,91 +27,27 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <opencv2/opencv.hpp>
+#include <onnxruntime_cxx_api.h>
 
 #include <cstdio>
 #include <cstdint>
+#include <filesystem>
 #include <cstdlib>
 #include <vector>
 #include <string>
 #include <memory>
 #include <chrono>
 #include <algorithm>
+#include <cmath>
 
 #pragma comment(lib, "ws2_32.lib")
 
 #include "RN_AI_cpp/capture/udp_wire_protocol.h"
 
-// ── 弹药数字裁剪参数（相对于 region 1 图像） ──────────────────────────────
-constexpr int AMMO_DIGIT_X = 305;
-constexpr int AMMO_DIGIT_Y = 7;
-constexpr int AMMO_DIGIT_W = 85;
-constexpr int AMMO_DIGIT_H = 54;
-
-// ── 模板匹配数字识别 ─────────────────────────────────────────────────────
-// 模板为 1.png~50.png，每张是对应弹药数的完整数字区域截图。
-// 直接用整图 TM_SQDIFF_NORMED 匹配，不做分割。
-static int detect_number(const cv::Mat& gray_roi) {
-    if (gray_roi.empty()) return -1;
-
-    static bool templates_loaded = false;
-    static std::vector<cv::Mat> templates;
-    static int tmpl_w = 0, tmpl_h = 0;
-    static int template_offset = 1; // 模板从 1.png 开始
-
-    if (!templates_loaded) {
-        const char* profile = getenv("USERPROFILE");
-        char path[MAX_PATH];
-        templates.reserve(51);
-        for (int v = 1; v <= 50; v++) {
-            sprintf_s(path, "%s\\rn_ai\\%d.png", profile, v);
-            cv::Mat tmpl = cv::imread(path, cv::IMREAD_GRAYSCALE);
-            if (!tmpl.empty()) {
-                if (tmpl_w == 0) { tmpl_w = tmpl.cols; tmpl_h = tmpl.rows; }
-                templates.push_back(tmpl);
-            }
-        }
-        template_offset = 1;
-        // 尝试加载 0.png（空弹夹），若有则偏移为 0
-        sprintf_s(path, "%s\\rn_ai\\0.png", profile);
-        cv::Mat tmpl0 = cv::imread(path, cv::IMREAD_GRAYSCALE);
-        if (!tmpl0.empty()) {
-            templates.insert(templates.begin(), tmpl0);
-            template_offset = 0;
-        }
-
-        templates_loaded = true;
-        printf("[templates] Loaded %zu templates (%dx%d), base_offset=%d\n",
-               templates.size(), tmpl_w, tmpl_h, template_offset);
-    }
-
-    // 整图缩放到模板大小
-    cv::Mat input;
-    cv::resize(gray_roi, input, cv::Size(tmpl_w, tmpl_h));
-
-    int best_val = -1;
-    double best_score = DBL_MAX;
-
-    // 收集所有匹配分数
-    std::vector<std::pair<double,int>> scores;
-    for (size_t i = 0; i < templates.size(); i++) {
-        cv::Mat r;
-        cv::matchTemplate(input, templates[i], r, cv::TM_SQDIFF_NORMED);
-        double mv; cv::minMaxLoc(r, &mv);
-        scores.push_back({mv, (int)(i + template_offset)});
-    }
-    std::sort(scores.begin(), scores.end());
-
-    best_score = scores[0].first;
-    best_val = scores[0].second;
-
-    // 每帧输出 top3 方便调试
-    printf(" [top3:");
-    for (int k = 0; k < 3 && k < (int)scores.size(); k++)
-        printf(" %d=%.3f", scores[k].second, scores[k].first);
-    printf("]");
-
-    return best_val;
-}
+// ── 数字位 ROI（相对于 region 1 图像，由 roi_selector.py 框选） ──────────
+constexpr int TENS_X = 312, TENS_Y = 13, TENS_W = 37, TENS_H = 47;
+constexpr int ONES_X = 351, ONES_Y = 13, ONES_W = 34, ONES_H = 48;
+#include "../RN_AI_cpp/digit/digit_classifier.h"
 
 int main(int argc, char* argv[]) {
     int port = (argc > 1) ? std::atoi(argv[1]) : 12345;
@@ -140,11 +78,10 @@ int main(int argc, char* argv[]) {
     if (profile) {
         sprintf_s(debug_dir, "%s\\rn_ai\\debug", profile);
         // 清空 debug 目录，重新积累
-        char cmd[MAX_PATH * 2];
-        sprintf_s(cmd, "rmdir /s /q \"%s\" 2>nul", debug_dir);
-        system(cmd);
-        CreateDirectoryA(debug_dir, nullptr);
-        printf("[debug] Region images with ammo labels will be saved to %s\n", debug_dir);
+        std::error_code ec;
+        std::filesystem::remove_all(debug_dir, ec);
+        std::filesystem::create_directories(debug_dir, ec);
+        printf("[debug] Cleared and ready: %s\n", debug_dir);
     }
 
     std::vector<uint8_t> buffer(MAX_DATAGRAM_SIZE);
@@ -153,6 +90,9 @@ int main(int argc, char* argv[]) {
     int total_frames = 0;
 
     printf("[receiver] Waiting for frames...\n");
+
+    // 初始化 CNN 分类器
+    DigitClassifier classifier(L"models/digit_classifier.onnx");
 
     while (true) {
         sockaddr_in from{};
@@ -205,17 +145,35 @@ int main(int argc, char* argv[]) {
                 if (img.empty()) { printf(" [%u:FAIL]", e.id); continue; }
                 printf(" [%u:%dx%d]", e.id, img.cols, img.rows);
 
-                // 区域1：裁剪弹药数字子区域并识别
+                // 区域1：CNN 数字识别 + 绘制覆盖层
                 int ammo_number = -1;
-                if (e.id == 1 && img.cols > AMMO_DIGIT_X + AMMO_DIGIT_W &&
-                                 img.rows > AMMO_DIGIT_Y + AMMO_DIGIT_H) {
-                    cv::Rect roi(AMMO_DIGIT_X, AMMO_DIGIT_Y, AMMO_DIGIT_W, AMMO_DIGIT_H);
-                    cv::Mat digit_area = img(roi).clone();
-
-                    cv::Mat gray;
-                    cv::cvtColor(digit_area, gray, cv::COLOR_BGR2GRAY);
-                    ammo_number = detect_number(gray);
+                if (e.id == 1) {
+                    ammo_number = classifier.detect(img,
+                        TENS_X, TENS_Y, TENS_W, TENS_H,
+                        ONES_X, ONES_Y, ONES_W, ONES_H, 15.0f);
                     printf(" ammo=%d", ammo_number);
+
+                    // 绘制 ROI 框（十分位=绿，个分位=蓝）
+                    cv::rectangle(img, cv::Rect(TENS_X, TENS_Y, TENS_W, TENS_H),
+                                  cv::Scalar(0, 255, 0), 1);
+                    cv::rectangle(img, cv::Rect(ONES_X, ONES_Y, ONES_W, ONES_H),
+                                  cv::Scalar(255, 128, 0), 1);
+
+                    // 绘制识别数字（白底黑字，左上角）
+                    char num_text[16];
+                    sprintf_s(num_text, "%d", ammo_number);
+                    int font = cv::FONT_HERSHEY_SIMPLEX;
+                    double font_scale = 1.0;
+                    int thickness = 2;
+                    int baseline = 0;
+                    cv::Size ts = cv::getTextSize(num_text, font, font_scale, thickness, &baseline);
+                    // 白底
+                    cv::rectangle(img, cv::Point(2, 2),
+                                  cv::Point(ts.width + 8, ts.height + 8),
+                                  cv::Scalar(255, 255, 255), cv::FILLED);
+                    // 黑字
+                    cv::putText(img, num_text, cv::Point(5, ts.height + 4),
+                                font, font_scale, cv::Scalar(0, 0, 0), thickness);
                 }
 
                 if (profile) {

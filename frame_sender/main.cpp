@@ -564,7 +564,7 @@ int main(int argc, char* argv[]) {
         header.frame_seq = frame_seq;
         header.capture_timestamp_ms = static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now().time_since_epoch()).count());
+                std::chrono::system_clock::now().time_since_epoch()).count());
         header.format = FORMAT_MULTI_REGION;
 
         std::vector<uint8_t> frame_buf;

@@ -177,6 +177,23 @@ bool Config::loadConfig(const std::string& filename)
         bScope_multiplier = 1.0f;
         triggerbot_bScope_multiplier = 1.0f;
 
+        // Ammo counter digit recognition
+        ammo_enabled = false;
+        ammo_tens_x = 312; ammo_tens_y = 13; ammo_tens_w = 37; ammo_tens_h = 47;
+        ammo_ones_x = 351; ammo_ones_y = 13; ammo_ones_w = 34; ammo_ones_h = 48;
+        ammo_blank_stddev_threshold = 10.0f;
+        ammo_display_x = 20; ammo_display_y = 60;
+        ammo_display_text_size = 24.0f;
+        ammo_display_color_r = 255; ammo_display_color_g = 255;
+        ammo_display_color_b = 0;   ammo_display_color_a = 255;
+        ammo_classify_every_n = 1;
+
+        // Auto reload
+        auto_reload = false;
+        auto_reload_threshold = 1;
+        auto_reload_cooldown_ms = 500;
+        auto_reload_button = 1;  // XButton2
+
         // AI
 #ifdef USE_CUDA
         backend = "TRT";
@@ -659,6 +676,33 @@ bool Config::loadConfig(const std::string& filename)
     bScope_multiplier = (float)get_double("bScope_multiplier", 1.2);
     triggerbot_bScope_multiplier = (float)get_double("triggerbot_bScope_multiplier", 1.2);
 
+    // Ammo counter digit recognition
+    ammo_enabled = get_bool("ammo_enabled", false);
+    ammo_tens_x = get_long("ammo_tens_x", 312);
+    ammo_tens_y = get_long("ammo_tens_y", 13);
+    ammo_tens_w = get_long("ammo_tens_w", 37);
+    ammo_tens_h = get_long("ammo_tens_h", 47);
+    ammo_ones_x = get_long("ammo_ones_x", 351);
+    ammo_ones_y = get_long("ammo_ones_y", 13);
+    ammo_ones_w = get_long("ammo_ones_w", 34);
+    ammo_ones_h = get_long("ammo_ones_h", 48);
+    ammo_blank_stddev_threshold = (float)get_double("ammo_blank_stddev_threshold", 10.0);
+    ammo_display_x = get_long("ammo_display_x", 20);
+    ammo_display_y = get_long("ammo_display_y", 60);
+    ammo_display_text_size = (float)get_double("ammo_display_text_size", 24.0);
+    ammo_display_color_r = get_long("ammo_display_color_r", 255);
+    ammo_display_color_g = get_long("ammo_display_color_g", 255);
+    ammo_display_color_b = get_long("ammo_display_color_b", 0);
+    ammo_display_color_a = get_long("ammo_display_color_a", 255);
+    ammo_classify_every_n = get_long("ammo_classify_every_n", 1);
+    if (ammo_classify_every_n < 1) ammo_classify_every_n = 1;
+
+    // Auto reload
+    auto_reload = get_bool("auto_reload", false);
+    auto_reload_threshold = get_long("auto_reload_threshold", 1);
+    auto_reload_cooldown_ms = get_long("auto_reload_cooldown_ms", 500);
+    auto_reload_button = get_long("auto_reload_button", 1);
+
     // Color detection
     color_erode_iter = get_long("color_erode_iter", 1);
     color_dilate_iter = get_long("color_dilate_iter", 2);
@@ -1035,6 +1079,35 @@ bool Config::saveConfig(const std::string& filename)
         << std::fixed << std::setprecision(1)
         << "bScope_multiplier = " << bScope_multiplier << "\n"
         << "triggerbot_bScope_multiplier = " << triggerbot_bScope_multiplier << "\n\n";
+
+    // Ammo counter
+    file << "# Ammo counter digit recognition\n"
+        << "ammo_enabled = " << (ammo_enabled ? "true" : "false") << "\n"
+        << "ammo_tens_x = " << ammo_tens_x << "\n"
+        << "ammo_tens_y = " << ammo_tens_y << "\n"
+        << "ammo_tens_w = " << ammo_tens_w << "\n"
+        << "ammo_tens_h = " << ammo_tens_h << "\n"
+        << "ammo_ones_x = " << ammo_ones_x << "\n"
+        << "ammo_ones_y = " << ammo_ones_y << "\n"
+        << "ammo_ones_w = " << ammo_ones_w << "\n"
+        << "ammo_ones_h = " << ammo_ones_h << "\n"
+        << "ammo_blank_stddev_threshold = " << ammo_blank_stddev_threshold << "\n"
+        << "ammo_display_x = " << ammo_display_x << "\n"
+        << "ammo_display_y = " << ammo_display_y << "\n"
+        << "ammo_display_text_size = " << ammo_display_text_size << "\n"
+        << "ammo_display_color_r = " << ammo_display_color_r << "\n"
+        << "ammo_display_color_g = " << ammo_display_color_g << "\n"
+        << "ammo_display_color_b = " << ammo_display_color_b << "\n"
+        << "ammo_display_color_a = " << ammo_display_color_a << "\n"
+        << "ammo_classify_every_n = " << ammo_classify_every_n << "\n"
+        << "\n";
+
+    // Auto reload
+    file << "# Auto reload\n"
+        << "auto_reload = " << (auto_reload ? "true" : "false") << "\n"
+        << "auto_reload_threshold = " << auto_reload_threshold << "\n"
+        << "auto_reload_cooldown_ms = " << auto_reload_cooldown_ms << "\n"
+        << "auto_reload_button = " << auto_reload_button << "\n\n";
 
     // AI
     file << "# AI\n"
