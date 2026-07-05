@@ -66,3 +66,4 @@ build_*.bat
 build_*.sh
 compile_*.bat
 *.rsp
+__pycache__/
