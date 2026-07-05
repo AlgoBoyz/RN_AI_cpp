@@ -105,6 +105,7 @@ MakcuConnection::MakcuConnection(const std::string& port, unsigned int baud_rate
 
 MakcuConnection::~MakcuConnection()
 {
+    // Stop the polling thread before disconnecting the device
     stopSdkPolling();
     try
     {
@@ -376,11 +377,14 @@ MakcuConnection::MakcuConnection(const std::string& port, unsigned int baud_rate
 MakcuConnection::~MakcuConnection()
 {
     listening_ = false;
+    // Join the listening thread BEFORE closing the serial port, otherwise
+    // serial_.close() races with serial_.available()/serial_.read() in the
+    // listening thread and corrupts the serial library's internal state.
+    if (listening_thread_.joinable())
+        listening_thread_.join();
     if (serial_.isOpen()) {
         try { serial_.close(); } catch (...) {}
     }
-    if (listening_thread_.joinable())
-        listening_thread_.join();
     is_open_ = false;
 }
 

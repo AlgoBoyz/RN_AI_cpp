@@ -16,6 +16,7 @@
 #include "mouse_input.h"
 #include "async_logger.h"
 #include "capture.h"
+#include "../keyboard/keycodes.h"
 
 MouseInputGatherer* g_mouse_input = nullptr;
 #include "SerialConnection.h"
@@ -222,11 +223,30 @@ void MouseThread::moveWorkerLoop()
         //   0=targeting-hold, 1=targeting-timed, 2=shoot-hold
         const auto& aim_source = (config.aim_trigger_mode == 2)
             ? config.button_shoot : config.button_targeting;
-        uint8_t aim_mask = 0;
-        for (const auto& name : aim_source)
-            aim_mask |= button_name_to_bit(name);
-        if (aim_mask == 0) aim_mask = 0x02;  // fallback: right button
-        const bool aim_held = (human_buttons & aim_mask) != 0;
+        // Determine aim_held from the appropriate source per trigger mode.
+        //   mode 0/1: RawInput button bits from config.button_targeting
+        //   mode 2:   RawInput button bits from config.button_shoot
+        //   mode 3:   GetAsyncKeyState for each key in config.button_aim_hold
+        bool aim_held = false;
+        const int aim_mode = config.aim_trigger_mode;
+        if (aim_mode == 3) {
+            // Keyboard-based hold (default F12) — not available via RawInput.
+            for (const auto& name : config.button_aim_hold) {
+                int vk = KeyCodes::getKeyCode(name);
+                if (vk > 0 && (GetAsyncKeyState(vk) & 0x8000)) {
+                    aim_held = true;
+                    break;
+                }
+            }
+        } else {
+            const auto& aim_source = (aim_mode == 2)
+                ? config.button_shoot : config.button_targeting;
+            uint8_t aim_mask = 0;
+            for (const auto& name : aim_source)
+                aim_mask |= button_name_to_bit(name);
+            if (aim_mask == 0) aim_mask = 0x02;  // fallback: right button
+            aim_held = (human_buttons & aim_mask) != 0;
+        }
 
         // Aim trigger state machine.
         //   mode 0 (hold):    aiming = aim_held
@@ -234,8 +254,8 @@ void MouseThread::moveWorkerLoop()
         //                     in window cancels); if still held when the
         //                     window expires, switch to hold-until-release.
         //   mode 2 (shoot):   aiming = aim_held (hold left button to aim)
+        //   mode 3 (key-hold): aiming = aim_held (hold configured key, default F12)
         bool aim_active = false;
-        const int aim_mode = config.aim_trigger_mode;
         if (aim_mode == 1) {
             auto now = std::chrono::steady_clock::now();
             bool press_edge = aim_held && !prev_aim_held;
@@ -274,8 +294,10 @@ void MouseThread::moveWorkerLoop()
 
             prev_aim_held = aim_held;
         } else {
-            // Mode 0 (targeting-hold) or mode 2 (shoot-hold)
-            const char* label = (aim_mode == 2) ? "ON (shoot)" : "ON (hold)";
+            // Mode 0 (targeting-hold), mode 2 (shoot-hold) or mode 3 (key-hold)
+            const char* label = (aim_mode == 2) ? "ON (shoot)"
+                            : (aim_mode == 3) ? "ON (key-hold)"
+                            : "ON (hold)";
             if (aim_held != prev_aim_held) {
                 printf("[Aim] %s\n", aim_held ? label : "OFF");
                 prev_aim_held = aim_held;

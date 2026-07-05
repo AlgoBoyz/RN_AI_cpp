@@ -128,6 +128,8 @@ public:
     //   0 = hold (aim while button held)
     //   1 = toggle-timed (tap = aim for aim_timed_duration_ms; tap again in
     //       window = cancel; holding past the window = stay aimed until release)
+    //   2 = shoot-hold (hold left mouse button to aim)
+    //   3 = key-hold  (hold a configurable key, default F12, to aim)
     int aim_trigger_mode;
     int aim_timed_duration_ms;
     // When true, throttle capture+inference to ~10fps when not aiming
@@ -193,6 +195,7 @@ public:
     std::vector<std::string> button_reload_config;
     std::vector<std::string> button_fusion_mode;
     std::vector<std::string> button_open_overlay;
+    std::vector<std::string> button_aim_hold;
     bool enable_arrows_settings;
 
     // Overlay

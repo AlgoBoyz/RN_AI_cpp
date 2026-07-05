@@ -58,25 +58,53 @@ std::atomic<bool> triggerbot_button(false);
 
 void createInputDevices()
 {
-    if (arduinoSerial)
+    // Null out mouse-thread pointers BEFORE deleting objects to prevent
+    // use-after-free: the mouse thread holds input_method_mutex in
+    // sendMovementToDriver, so setXxxConnection(nullptr) guarantees the
+    // mouse thread will see nullptr and skip the freed object.
+    if (arduinoSerial && globalMouseThread)
+    {
+        globalMouseThread->setSerialConnection(nullptr);
+        delete arduinoSerial;
+        arduinoSerial = nullptr;
+    }
+    else if (arduinoSerial)
     {
         delete arduinoSerial;
         arduinoSerial = nullptr;
     }
 
-    if (kmboxSerial)
+    if (kmboxSerial && globalMouseThread)
+    {
+        globalMouseThread->setKmboxConnection(nullptr);
+        delete kmboxSerial;
+        kmboxSerial = nullptr;
+    }
+    else if (kmboxSerial)
     {
         delete kmboxSerial;
         kmboxSerial = nullptr;
     }
 
-    if (makcu)
+    if (makcu && globalMouseThread)
+    {
+        globalMouseThread->setMakcuConnection(nullptr);
+        delete makcu;
+        makcu = nullptr;
+    }
+    else if (makcu)
     {
         delete makcu;
         makcu = nullptr;
     }
 
-    if (kmboxNetSerial)
+    if (kmboxNetSerial && globalMouseThread)
+    {
+        globalMouseThread->setKmboxNetConnection(nullptr);
+        delete kmboxNetSerial;
+        kmboxNetSerial = nullptr;
+    }
+    else if (kmboxNetSerial)
     {
         delete kmboxNetSerial;
         kmboxNetSerial = nullptr;

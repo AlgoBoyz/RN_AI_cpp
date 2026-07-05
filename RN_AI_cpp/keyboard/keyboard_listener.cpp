@@ -124,14 +124,17 @@ void keyboardListener()
                 static bool logged_auto = false;
                 if (!logged_auto) {
                     logged_auto = true;
-                    std::cout << "[Input] auto_aim = true → aiming always ON" << std::endl;
+                    std::cout << "[Input] auto_aim = true -> aiming always ON" << std::endl;
                 }
             }
         }
         else if (!g_mouse_input)
         {
             // Fallback path: no RawInput gatherer, use Win32 async key state.
-            bool new_aiming = isAnyKeyPressed(config.button_targeting);
+            // Mode 3 (key-hold) uses config.button_aim_hold instead of button_targeting.
+            const auto& aim_keys = (config.aim_trigger_mode == 3)
+                ? config.button_aim_hold : config.button_targeting;
+            bool new_aiming = isAnyKeyPressed(aim_keys);
             aiming = new_aiming;
         }
 

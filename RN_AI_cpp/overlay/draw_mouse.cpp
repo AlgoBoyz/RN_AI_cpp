@@ -331,7 +331,7 @@ void draw_mouse()
         config.saveConfig();
 
     ImGui::SeparatorText("Aim Trigger");
-    const char* aim_modes[] = { "Hold (aim while pressed)", "Timed toggle (tap = N ms)", "Shoot (hold left button)" };
+    const char* aim_modes[] = { "Hold (aim while pressed)", "Timed toggle (tap = N ms)", "Shoot (hold left button)", "Key hold (hold F12 to aim)" };
     int aim_m = config.aim_trigger_mode;
     if (ImGui::Combo("Aim Trigger Mode", &aim_m, aim_modes, IM_ARRAYSIZE(aim_modes))) {
         config.aim_trigger_mode = aim_m;

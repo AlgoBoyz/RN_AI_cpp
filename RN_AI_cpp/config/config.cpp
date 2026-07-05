@@ -221,6 +221,7 @@ bool Config::loadConfig(const std::string& filename)
         button_reload_config = splitString("F4");
         button_fusion_mode = splitString("F");
         button_open_overlay = splitString("Home");
+        button_aim_hold = splitString("F12");
         enable_arrows_settings = false;
 
         // Overlay
@@ -753,6 +754,7 @@ bool Config::loadConfig(const std::string& filename)
     button_reload_config = splitString(get_string("button_reload_config", "F4"));
     button_fusion_mode = splitString(get_string("button_fusion_mode", "F"));
     button_open_overlay = splitString(get_string("button_open_overlay", "Home"));
+    button_aim_hold = splitString(get_string("button_aim_hold", "F12"));
     enable_arrows_settings = get_bool("enable_arrows_settings", false);
 
     // Overlay
@@ -1072,10 +1074,9 @@ bool Config::saveConfig(const std::string& filename)
         << "button_reload_config = " << joinStrings(button_reload_config) << "\n"
         << "button_fusion_mode = " << joinStrings(button_fusion_mode) << "\n"
         << "button_open_overlay = " << joinStrings(button_open_overlay) << "\n"
-        << "enable_arrows_settings = " << (enable_arrows_settings ? "true" : "false") << "\n\n";
-
-    // Overlay
-    file << "# Overlay\n"
+        << "button_aim_hold = " << joinStrings(button_aim_hold) << "\n"
+        << "enable_arrows_settings = " << (enable_arrows_settings ? "true" : "false") << "\n\n"
+        << "# Overlay\n"
         << "overlay_opacity = " << overlay_opacity << "\n"
         << "overlay_snow_theme = " << (overlay_snow_theme ? "true" : "false") << "\n"
         << std::fixed << std::setprecision(2)

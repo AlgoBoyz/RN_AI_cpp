@@ -125,6 +125,64 @@ void draw_buttons()
 
     ImGui::Separator();
 
+    ImGui::Text("Aim Hold Buttons");
+
+    for (size_t i = 0; i < config.button_aim_hold.size(); )
+    {
+        std::string& current_key_name = config.button_aim_hold[i];
+
+        int current_index = -1;
+        for (size_t k = 0; k < key_names.size(); ++k)
+        {
+            if (key_names[k] == current_key_name)
+            {
+                current_index = static_cast<int>(k);
+                break;
+            }
+        }
+
+        if (current_index == -1)
+        {
+            current_index = 0;
+        }
+
+        std::string combo_label = "Aim Hold Button " + std::to_string(i);
+
+        if (ImGui::Combo(combo_label.c_str(), &current_index, key_names_cstrs.data(), static_cast<int>(key_names_cstrs.size())))
+        {
+            current_key_name = key_names[current_index];
+            config.saveConfig();
+        }
+
+        ImGui::SameLine();
+        std::string remove_button_label = "Remove##button_aim_hold" + std::to_string(i);
+        if (ImGui::Button(remove_button_label.c_str()))
+        {
+            if (config.button_aim_hold.size() <= 1)
+            {
+                config.button_aim_hold[0] = std::string("None");
+                config.saveConfig();
+                continue;
+            }
+            else
+            {
+                config.button_aim_hold.erase(config.button_aim_hold.begin() + i);
+                config.saveConfig();
+                continue;
+            }
+        }
+
+        ++i;
+    }
+
+    if (ImGui::Button("Add button##aim_hold"))
+    {
+        config.button_aim_hold.push_back("None");
+        config.saveConfig();
+    }
+
+    ImGui::Separator();
+
     ImGui::Text("Triggerbot Buttons");
 
     for (size_t i = 0; i < config.button_triggerbot.size(); )

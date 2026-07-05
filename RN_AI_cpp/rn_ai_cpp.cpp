@@ -45,6 +45,7 @@
 #include "overlay/ui_runtime.h"
 #include "other_tools.h"
 #include "virtual_camera.h"
+#include "keycodes.h"
 
 std::condition_variable frameCV;
 std::atomic<bool> shouldExit(false);
@@ -1342,25 +1343,53 @@ static std::vector<std::string> enumerateComPorts()
 
 void createInputDevices()
 {
-    if (arduinoSerial)
+    // Null out mouse-thread pointers BEFORE deleting objects to prevent
+    // use-after-free: the mouse thread holds input_method_mutex in
+    // sendMovementToDriver, so setXxxConnection(nullptr) guarantees the
+    // mouse thread will see nullptr and skip the freed object.
+    if (arduinoSerial && globalMouseThread)
+    {
+        globalMouseThread->setSerialConnection(nullptr);
+        delete arduinoSerial;
+        arduinoSerial = nullptr;
+    }
+    else if (arduinoSerial)
     {
         delete arduinoSerial;
         arduinoSerial = nullptr;
     }
 
-    if (kmboxSerial)
+    if (kmboxSerial && globalMouseThread)
+    {
+        globalMouseThread->setKmboxConnection(nullptr);
+        delete kmboxSerial;
+        kmboxSerial = nullptr;
+    }
+    else if (kmboxSerial)
     {
         delete kmboxSerial;
         kmboxSerial = nullptr;
     }
 
-    if (makcu_conn)
+    if (makcu_conn && globalMouseThread)
+    {
+        globalMouseThread->setMakcuConnection(nullptr);
+        delete makcu_conn;
+        makcu_conn = nullptr;
+    }
+    else if (makcu_conn)
     {
         delete makcu_conn;
         makcu_conn = nullptr;
     }
 
-    if (kmboxNetSerial)
+    if (kmboxNetSerial && globalMouseThread)
+    {
+        globalMouseThread->setKmboxNetConnection(nullptr);
+        delete kmboxNetSerial;
+        kmboxNetSerial = nullptr;
+    }
+    else if (kmboxNetSerial)
     {
         delete kmboxNetSerial;
         kmboxNetSerial = nullptr;
