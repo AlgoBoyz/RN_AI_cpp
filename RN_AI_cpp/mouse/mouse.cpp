@@ -219,15 +219,12 @@ void MouseThread::moveWorkerLoop()
             if (name == "X2MouseButton")     return 0x10;
             return 0;
         };
-        // Choose aim button source per trigger mode.
-        //   0=targeting-hold, 1=targeting-timed, 2=shoot-hold
-        const auto& aim_source = (config.aim_trigger_mode == 2)
-            ? config.button_shoot : config.button_targeting;
         // Determine aim_held from the appropriate source per trigger mode.
         //   mode 0/1: RawInput button bits from config.button_targeting
         //   mode 2:   RawInput button bits from config.button_shoot
         //   mode 3:   GetAsyncKeyState for each key in config.button_aim_hold
         bool aim_held = false;
+        uint8_t aim_mask = 0;
         const int aim_mode = config.aim_trigger_mode;
         if (aim_mode == 3) {
             // Keyboard-based hold (default F12) — not available via RawInput.
@@ -241,7 +238,6 @@ void MouseThread::moveWorkerLoop()
         } else {
             const auto& aim_source = (aim_mode == 2)
                 ? config.button_shoot : config.button_targeting;
-            uint8_t aim_mask = 0;
             for (const auto& name : aim_source)
                 aim_mask |= button_name_to_bit(name);
             if (aim_mask == 0) aim_mask = 0x02;  // fallback: right button
