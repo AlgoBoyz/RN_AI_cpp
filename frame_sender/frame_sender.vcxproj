@@ -23,7 +23,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.props" />
+    <Import Project="$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v13.3\extras\visual_studio_integration\MSBuildExtensions\CUDA 13.3.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -31,8 +31,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(MSBuildProjectDirectory)\..\vendor\opencv\install\include;$(MSBuildProjectDirectory)\..\vendor\gpujpeg;$(MSBuildProjectDirectory)\..\RN_AI_cpp;$(MSBuildProjectDirectory)\..\RN_AI_cpp\config;$(MSBuildProjectDirectory)\..\RN_AI_cpp\capture;$(MSBuildProjectDirectory)\..\RN_AI_cpp\detector;$(MSBuildProjectDirectory)\..\RN_AI_cpp\tensorrt;$(MSBuildProjectDirectory)\..\RN_AI_cpp\mouse;$(MSBuildProjectDirectory)\..\RN_AI_cpp\overlay;$(MSBuildProjectDirectory)\..\RN_AI_cpp\keyboard;$(MSBuildProjectDirectory)\..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\include;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v12.8\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(MSBuildProjectDirectory)\..\vendor\opencv\install\x64\vc17\lib;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v12.8\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(MSBuildProjectDirectory)\..\vendor\gpujpeg;$(MSBuildProjectDirectory)\..\RN_AI_cpp;$(MSBuildProjectDirectory)\..\RN_AI_cpp\capture;$(MSBuildProjectDirectory)\..\RN_AI_cpp\config;$(MSBuildProjectDirectory)\..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\include;$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v13.3\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v13.3\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -49,18 +49,16 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>opencv_world4100.lib;ws2_32.lib;d3d11.lib;dxgi.lib;cuda.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;d3d11.lib;dxgi.lib;cuda.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
-      <CodeGeneration>compute_52,sm_52</CodeGeneration>
+      <CodeGeneration>compute_120,sm_120</CodeGeneration>
       <AdditionalOptions>-Xcompiler "/Zc:__cplusplus" %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="..\RN_AI_cpp\capture\duplication_api_capture.cpp" />
     <ClCompile Include="..\RN_AI_cpp\capture\udp_wire_protocol.cpp" />
-    <ClCompile Include="..\codec\gpu_jpeg_codec.cpp" />
     <ClCompile Include="..\vendor\gpujpeg\src\gpujpeg_decoder.c">
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/std:c11 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -109,12 +107,10 @@
     <CudaCompile Include="..\vendor\gpujpeg\src\gpujpeg_preprocessor.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\RN_AI_cpp\capture\duplication_api_capture.h" />
     <ClInclude Include="..\RN_AI_cpp\capture\udp_wire_protocol.h" />
-    <ClInclude Include="..\codec\gpu_jpeg_codec.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.targets" />
+    <Import Project="$(ProgramW6432)\NVIDIA GPU Computing Toolkit\CUDA\v13.3\extras\visual_studio_integration\MSBuildExtensions\CUDA 13.3.targets" />
   </ImportGroup>
 </Project>
