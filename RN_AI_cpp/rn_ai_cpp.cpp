@@ -85,6 +85,7 @@ std::atomic<bool> shooting(false);
 std::atomic<bool> triggerbot_button(false);
 std::atomic<int> g_ammo_count(-1);
 std::atomic<uint64_t> g_ammo_capture_ts(0);
+std::atomic<uint64_t> g_ammo_sender_ts(0);
 
 Game_overlay* gameOverlayPtr = nullptr;
 
@@ -2287,36 +2288,80 @@ void mouseThreadFunction(MouseThread& mouseThread)
             }
         }
 
-        if (target && (shouldPressAuto || shouldPressTrigger))
-        {
-            if (shouldPressTrigger)
-                mouseThread.pressMouse(*target, config.triggerbot_bScope_multiplier);
-            else
-                mouseThread.pressMouse(*target);
-        }
-        else
-        {
-            mouseThread.releaseMouse();
-        }
+        // ── Auto reload: detect continuous ammo decrease, predict empty ──
+        static auto reload_block_until = std::chrono::steady_clock::now();
+        bool reload_blocked = false;
 
-        // ── Auto reload ──
         if (config.auto_reload && config.ammo_enabled) {
             static auto last_reload = std::chrono::steady_clock::now() - std::chrono::milliseconds(1000);
+            static bool can_trigger = true;
+            static int last_trigger_ammo = -1;
+
             int ammo = g_ammo_count.load(std::memory_order_relaxed);
-            if (ammo >= 0 && ammo <= config.auto_reload_threshold) {
-                auto now = std::chrono::steady_clock::now();
+            auto now = std::chrono::steady_clock::now();
+            static bool was_blocked = false;
+            if (now >= reload_block_until) {
+                if (was_blocked) {
+                    printf("[AutoReload] block END\n");
+                    was_blocked = false;
+                }
+                mouseThread.suppress_left.store(false, std::memory_order_relaxed);
+            } else {
+                was_blocked = true;
+            }
+            reload_blocked = (now < reload_block_until);
+
+            // Unlock if reload completed (ammo went up) OR if ammo keeps
+            // dropping (trigger didn't work, retry on next lower value)
+            if (ammo > last_trigger_ammo + 5 || (ammo >= 0 && ammo < last_trigger_ammo))
+                can_trigger = true;
+
+            // Roll randomized threshold (80%→1, 15%→2, 5%→3, with wiggle)
+            static int dynamic_threshold = 1;
+            static auto last_thresh_roll = std::chrono::steady_clock::now();
+            if (now - last_thresh_roll > std::chrono::milliseconds(200)) {
+                double w1 = 80.0 + (rand() % 21 - 10);   // 80% ±10%
+                double w2 = 15.0 + (rand() % 11 - 5);    // 15% ±5%
+                double w3 = 5.0  + (rand() % 7  - 3);    // 5% ±3%
+                if (w1 < 0) w1 = 0; if (w2 < 0) w2 = 0; if (w3 < 0) w3 = 0;
+                double total = w1 + w2 + w3;
+                double r = (double)(rand() % 10000) / 10000.0 * total;
+                if (r < w1)       dynamic_threshold = 1;
+                else if (r < w1 + w2) dynamic_threshold = 2;
+                else                   dynamic_threshold = 3;
+                last_thresh_roll = now;
+            }
+
+            if (!reload_blocked && ammo >= 0 && can_trigger
+                && ammo <= dynamic_threshold) {
                 int cooldown_ms = std::max(50, config.auto_reload_cooldown_ms);
                 if (now - last_reload >= std::chrono::milliseconds(cooldown_ms)) {
-                    uint64_t cap_ts = g_ammo_capture_ts.load(std::memory_order_relaxed);
-                    auto now_sys_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now().time_since_epoch()).count();
-                    auto diff_ms = (long long)(now_sys_ms - (long long)cap_ts);
-                    ALOG("[AutoReload] FIRE ammo=%d classify_ts=%llu fire_ts=%llu diff=%lldms",
-                         ammo, cap_ts, now_sys_ms, diff_ms);
-                    // Send mouse side button
-                    mouseThread.pressMouseSideButton(config.auto_reload_button);
+                    printf("[AutoReload] FIRE ammo=%d threshold=%d (set suppress+side)\n",
+                           ammo, dynamic_threshold);
+                    mouseThread.suppress_left.store(true, std::memory_order_relaxed);
+                    mouseThread.side_click_frames.store(60, std::memory_order_relaxed);
+                    reload_block_until = now + std::chrono::milliseconds(70);
+                    reload_blocked = true;
                     last_reload = now;
+                    last_trigger_ammo = ammo;
+                    can_trigger = false;
                 }
+            }
+        }
+
+        // Auto-shoot / triggerbot (fully suppressed during reload block)
+        if (!reload_blocked)
+        {
+            if (target && (shouldPressAuto || shouldPressTrigger))
+            {
+                if (shouldPressTrigger)
+                    mouseThread.pressMouse(*target, config.triggerbot_bScope_multiplier);
+                else
+                    mouseThread.pressMouse(*target);
+            }
+            else
+            {
+                mouseThread.releaseMouse();
             }
         }
 

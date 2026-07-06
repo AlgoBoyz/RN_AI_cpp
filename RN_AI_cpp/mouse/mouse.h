@@ -235,6 +235,9 @@ public:
     void pressMouse(const AimbotTarget& target, float scope_multiplier = -1.0f);
     void releaseMouse();
     void pressMouseSideButton(int button);  // 0=XButton1, 1=XButton2
+    void queueMouseClick(int button);       // via moveQueue, worker-safe
+    std::atomic<bool> suppress_left{ false };  // auto-reload: mask left btn
+    std::atomic<int>  side_click_frames{ 0 };  // frames remaining to hold side btn
     void resetPrediction();
     void checkAndResetPredictions();
     bool check_target_in_scope(double x, double y,

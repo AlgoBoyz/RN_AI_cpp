@@ -447,6 +447,11 @@ void draw_game_overlay_settings()
         ImGui::SliderInt("Cooldown (ms)", &config.auto_reload_cooldown_ms, 50, 3000);
         if (ImGui::IsItemDeactivatedAfterEdit()) reload_changed = true;
 
+        ImGui::SliderInt("Lead (ms)", &config.auto_reload_lead_ms, 1, 200);
+        if (ImGui::IsItemDeactivatedAfterEdit()) reload_changed = true;
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Trigger reload this many ms before ammo hits 0 (predicted)");
+
         ImGui::Combo("Side Button", &config.auto_reload_button,
                      "XButton1 (Back)\0XButton2 (Forward)\0\0");
         if (ImGui::IsItemDeactivatedAfterEdit()) reload_changed = true;

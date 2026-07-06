@@ -306,6 +306,9 @@ cv::Mat UdpFrameReceiver::GetNextFrameCpu() {
                         auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::system_clock::now().time_since_epoch()).count();
                         g_ammo_capture_ts.store(now_ms, std::memory_order_relaxed);
+                        extern std::atomic<uint64_t> g_ammo_sender_ts;
+                        g_ammo_sender_ts.store(last_mr_frame_.header.capture_timestamp_ms,
+                                               std::memory_order_relaxed);
                         if (ammo_log_counter++ % 300 == 0)
                             ALOG("[Ammo] Detected=%d (region1=%dx%d)", ammo, region1.cols, region1.rows);
                         static auto last_fps_log = std::chrono::steady_clock::now();

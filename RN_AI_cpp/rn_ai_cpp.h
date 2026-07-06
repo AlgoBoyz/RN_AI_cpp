@@ -41,6 +41,7 @@ extern std::atomic<bool> zooming;
 extern std::atomic<bool> triggerbot_button;
 extern std::atomic<int> g_ammo_count;
 extern std::atomic<uint64_t> g_ammo_capture_ts;
+extern std::atomic<uint64_t> g_ammo_sender_ts;
 
 void SetConsoleFileLoggingEnabled(bool enabled, bool clear_on_enable = false);
 

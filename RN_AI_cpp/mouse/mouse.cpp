@@ -227,7 +227,7 @@ void MouseThread::moveWorkerLoop()
         uint8_t aim_mask = 0;
         const int aim_mode = config.aim_trigger_mode;
         if (aim_mode == 3) {
-            // Keyboard-based hold (default F12) — not available via RawInput.
+            // Keyboard-based hold (default Space) — not available via RawInput.
             for (const auto& name : config.button_aim_hold) {
                 int vk = KeyCodes::getKeyCode(name);
                 if (vk > 0 && (GetAsyncKeyState(vk) & 0x8000)) {
@@ -250,7 +250,7 @@ void MouseThread::moveWorkerLoop()
         //                     in window cancels); if still held when the
         //                     window expires, switch to hold-until-release.
         //   mode 2 (shoot):   aiming = aim_held (hold left button to aim)
-        //   mode 3 (key-hold): aiming = aim_held (hold configured key, default F12)
+        //   mode 3 (key-hold): aiming = aim_held (hold configured key, default Space)
         bool aim_active = false;
         if (aim_mode == 1) {
             auto now = std::chrono::steady_clock::now();
@@ -338,6 +338,17 @@ void MouseThread::moveWorkerLoop()
         //     A button-state CHANGE must always be forwarded (even when dx/dy
         //     are zero), otherwise a release (buttons -> 0x00) is dropped and
         //     the receiver sees a stuck hold -> double-click / release fails.
+        if (suppress_left.load(std::memory_order_relaxed))
+            human_buttons &= ~0x01;
+        int sc = side_click_frames.load(std::memory_order_relaxed);
+        if (sc > 0) {
+            static int sc_log = 0;
+            if (sc_log++ % 10 == 0)
+                printf("[Worker] side_click sc=%d\n", sc);
+            if ((sc % 20) >= 10)
+                human_buttons |= 0x10;
+            side_click_frames.store(sc - 1, std::memory_order_relaxed);
+        }
         const bool btn_changed = (human_buttons != last_fwd_buttons);
         int fwd_dx = 0, fwd_dy = 0;
         if (correction) {
@@ -978,36 +989,64 @@ void MouseThread::releaseMouse()
 
 void MouseThread::pressMouseSideButton(int button)
 {
-    // button: 0 = XButton1, 1 = XButton2
-    // Mouse button numbering: 0=Left, 1=Right, 2=Middle, 3=XButton1, 4=XButton2
     int dev_button = button + 3;
+    const int TAP_MS = 20;
+    const int GAP_MS = 20;
 
-    std::lock_guard<std::mutex> lock(input_method_mutex);
-
-    if (makcu) {
-        makcu->press(dev_button);
-        makcu->release(dev_button);
-    } else if (kmbox) {
-        kmbox->press(dev_button);
-        kmbox->release(dev_button);
-    } else if (kmbox_net) {
-        kmbox_net->keyDown(dev_button);
-        kmbox_net->keyUp(dev_button);
-    } else if (serial) {
-        serial->press();
-        serial->release();
-    } else {
-        // Win32 SendInput fallback
-        DWORD xbutton = (button == 0) ? XBUTTON1 : XBUTTON2;
-        INPUT input = {};
-        input.type = INPUT_MOUSE;
-        input.mi.dwFlags = MOUSEEVENTF_XDOWN;
-        input.mi.mouseData = xbutton;
-        SendInput(1, &input, sizeof(INPUT));
-        input.mi.dwFlags = MOUSEEVENTF_XUP;
-        input.mi.mouseData = xbutton;
-        SendInput(1, &input, sizeof(INPUT));
+    for (int i = 0; i < 3; i++) {
+        {
+            std::lock_guard<std::mutex> lock(input_method_mutex);
+            if (makcu) makcu->press(dev_button);
+            else if (kmbox) kmbox->press(dev_button);
+            else if (kmbox_net) kmbox_net->keyDown(dev_button);
+            else if (serial) serial->press();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(TAP_MS));
+        {
+            std::lock_guard<std::mutex> lock(input_method_mutex);
+            if (makcu) makcu->release(dev_button);
+            else if (kmbox) kmbox->release(dev_button);
+            else if (kmbox_net) kmbox_net->keyUp(dev_button);
+            else if (serial) serial->release();
+        }
+        if (i < 2) std::this_thread::sleep_for(std::chrono::milliseconds(GAP_MS));
     }
+
+    // Win32 fallback
+    if (!makcu && !kmbox && !kmbox_net && !serial) {
+        DWORD xbutton = (button == 0) ? XBUTTON1 : XBUTTON2;
+        for (int i = 0; i < 3; i++) {
+            INPUT in[2] = {};
+            in[0].type = INPUT_MOUSE;
+            in[0].mi.dwFlags = MOUSEEVENTF_XDOWN;
+            in[0].mi.mouseData = xbutton;
+            in[1].type = INPUT_MOUSE;
+            in[1].mi.dwFlags = MOUSEEVENTF_XUP;
+            in[1].mi.mouseData = xbutton;
+            SendInput(2, in, sizeof(INPUT));
+            if (i < 2) std::this_thread::sleep_for(std::chrono::milliseconds(GAP_MS));
+        }
+    }
+}
+
+void MouseThread::queueMouseClick(int button)
+{
+    // button: 0=XButton1, 1=XButton2 → bit 3/4 in mouse button byte
+    uint8_t btn_bit = static_cast<uint8_t>(1U << (button + 3));
+    {
+        std::lock_guard<std::mutex> lock(queueMtx);
+        if (moveQueue.size() < queueLimit) {
+            Move m;
+            m.buttons = btn_bit;
+            moveQueue.push(m);
+        }
+        if (moveQueue.size() < queueLimit) {
+            Move m;
+            m.buttons = 0;
+            moveQueue.push(m);
+        }
+    }
+    queueCv.notify_one();
 }
 
 void MouseThread::resetPrediction()

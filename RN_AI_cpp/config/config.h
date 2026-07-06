@@ -176,7 +176,8 @@ public:
     bool auto_reload;
     int auto_reload_threshold;
     int auto_reload_cooldown_ms;
-    int auto_reload_button;  // 0=XButton1, 1=XButton2
+    int auto_reload_lead_ms;   // trigger N ms before ammo hits 0
+    int auto_reload_button;    // 0=XButton1, 1=XButton2
 
     // AI
     std::string backend;

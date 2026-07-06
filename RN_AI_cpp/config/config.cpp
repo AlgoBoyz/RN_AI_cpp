@@ -192,6 +192,7 @@ bool Config::loadConfig(const std::string& filename)
         auto_reload = false;
         auto_reload_threshold = 1;
         auto_reload_cooldown_ms = 500;
+        auto_reload_lead_ms = 150;
         auto_reload_button = 1;  // XButton2
 
         // AI
@@ -238,7 +239,7 @@ bool Config::loadConfig(const std::string& filename)
         button_reload_config = splitString("F4");
         button_fusion_mode = splitString("F");
         button_open_overlay = splitString("Home");
-        button_aim_hold = splitString("F12");
+        button_aim_hold = splitString("Space");
         enable_arrows_settings = false;
 
         // Overlay
@@ -701,6 +702,7 @@ bool Config::loadConfig(const std::string& filename)
     auto_reload = get_bool("auto_reload", false);
     auto_reload_threshold = get_long("auto_reload_threshold", 1);
     auto_reload_cooldown_ms = get_long("auto_reload_cooldown_ms", 500);
+    auto_reload_lead_ms = get_long("auto_reload_lead_ms", 5);
     auto_reload_button = get_long("auto_reload_button", 1);
 
     // Color detection
@@ -798,7 +800,7 @@ bool Config::loadConfig(const std::string& filename)
     button_reload_config = splitString(get_string("button_reload_config", "F4"));
     button_fusion_mode = splitString(get_string("button_fusion_mode", "F"));
     button_open_overlay = splitString(get_string("button_open_overlay", "Home"));
-    button_aim_hold = splitString(get_string("button_aim_hold", "F12"));
+    button_aim_hold = splitString(get_string("button_aim_hold", "Space"));
     enable_arrows_settings = get_bool("enable_arrows_settings", false);
 
     // Overlay
@@ -1107,6 +1109,7 @@ bool Config::saveConfig(const std::string& filename)
         << "auto_reload = " << (auto_reload ? "true" : "false") << "\n"
         << "auto_reload_threshold = " << auto_reload_threshold << "\n"
         << "auto_reload_cooldown_ms = " << auto_reload_cooldown_ms << "\n"
+        << "auto_reload_lead_ms = " << auto_reload_lead_ms << "\n"
         << "auto_reload_button = " << auto_reload_button << "\n\n";
 
     // AI
