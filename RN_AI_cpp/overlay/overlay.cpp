@@ -212,9 +212,37 @@ void SetupImGui()
     ImGuiIO& io = ImGui::GetIO();
     io.FontGlobalScale = config.overlay_ui_scale;
 
-    // Merge Windows icon font into the default ImGui font for sidebar icons.
+    // Merge CJK + icon fonts into the default ImGui font.
     io.Fonts->Clear();
+    io.Fonts->TexDesiredWidth = 4096;  // need space for CJK glyphs
     io.Fonts->AddFontDefault();
+    // Merge CJK font for Chinese tooltips
+    {
+        ImFontConfig cjk_cfg{};
+        cjk_cfg.MergeMode = true;
+        cjk_cfg.PixelSnapH = true;
+        cjk_cfg.OversampleH = 1;
+        cjk_cfg.OversampleV = 1;
+        cjk_cfg.GlyphMinAdvanceX = 13.0f;
+        const ImWchar* cjk_ranges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
+        const char* cjk_fonts[] = { "C:\\Windows\\Fonts\\msyh.ttc",
+                                     "C:\\Windows\\Fonts\\simhei.ttf",
+                                     "C:\\Windows\\Fonts\\simsun.ttc",
+                                     nullptr };
+        bool cjk_ok = false;
+        for (int i = 0; cjk_fonts[i]; i++) {
+            FILE* test = fopen(cjk_fonts[i], "rb");
+            if (test) { fclose(test); cjk_ok = true; break; }
+        }
+        if (cjk_ok) {
+            for (int i = 0; cjk_fonts[i]; i++) {
+                ImFont* f = io.Fonts->AddFontFromFileTTF(cjk_fonts[i], 13.0f, &cjk_cfg, cjk_ranges);
+                if (f) { printf("[Overlay] CJK font loaded: %s\n", cjk_fonts[i]); break; }
+            }
+        } else {
+            printf("[Overlay] WARN: no CJK font found in Windows\\Fonts\n");
+        }
+    }
     ImFontConfig icon_cfg{};
     icon_cfg.MergeMode = true;
     icon_cfg.PixelSnapH = true;

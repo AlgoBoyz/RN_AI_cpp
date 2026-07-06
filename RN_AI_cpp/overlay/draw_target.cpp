@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
 #include <winsock2.h>
 #include <Windows.h>
@@ -195,16 +195,19 @@ void draw_target()
     {
         if (ImGui::Checkbox("Disable Headshot Mode", &config.disable_headshot))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 关闭爆头模式，瞄准身体中心而非头部。默认false, 推荐false(保持爆头模式)");
         if (OverlayUI::g_show_descriptions)
             ImGui::TextDisabled("Aim for body center instead of head");
 
         if (ImGui::Checkbox("Ignore Third Person", &config.ignore_third_person))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 忽略第三人称视角下的自身角色模型，避免瞄准自己。默认false, 推荐第三人称时开启");
         if (OverlayUI::g_show_descriptions)
             ImGui::TextDisabled("Don't aim at your own character in 3rd person view");
 
         if (ImGui::Checkbox("Auto Aim Active", &config.auto_aim))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 自动瞄准总开关，关闭后所有自瞄功能停止。默认false, 推荐true(使用自瞄时)");
 
         int head_id = config.class_head;
         ImGui::TextUnformatted("Head Class Id");
@@ -214,6 +217,7 @@ void draw_target()
             config.class_head = std::max(0, head_id);
             changed = true;
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 爆头检测使用的类别ID。调大: 使用更高ID的类别作为头部; 调小: 使用更低ID的类别作为头部。默认7, 推荐7");
 
         float max_scope_px = static_cast<float>(std::hypot(
             static_cast<double>(config.detection_resolution),
@@ -240,6 +244,7 @@ void draw_target()
                 config.aim_bot_scope = (scope_percent_edit / 100.0f) * max_scope_px;
             changed = true;
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 自瞄搜索半径，占屏幕半径的百分比。调大: 搜索范围更广但性能开销更大; 调小: 仅瞄准靠近屏幕中心的目标。默认约50%, 推荐40~60%");
     }
     OverlayUI::EndCard();
 
@@ -250,6 +255,7 @@ void draw_target()
             config.target_lock_enabled = config.smart_target_lock;
             changed = true;
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用智能目标锁定，锁定后保持瞄准当前目标不轻易切换。默认true, 推荐true");
         if (config.smart_target_lock)
         {
             if (OverlayUI::FloatControlRow(
@@ -263,6 +269,7 @@ void draw_target()
                 "px",
                 "Max pixel distance to maintain lock on current target"))
                 changed = true;
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 目标锁定后允许的最大像素偏移距离，超出则解锁。调大: 锁定更粘滞不易丢失; 调小: 更容易切换目标。默认40px, 推荐40~80px");
 
             float reacquire_ms = config.target_lock_reacquire_time * 1000.0f;
             if (OverlayUI::FloatControlRow(
@@ -279,6 +286,7 @@ void draw_target()
                 config.target_lock_reacquire_time = reacquire_ms / 1000.0f;
                 changed = true;
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 丢失当前目标后等待多久才搜索新目标。调大: 减少目标抖动切换; 调小: 更快捕捉新目标。默认100ms, 推荐100~200ms");
 
             float switch_delay_ms = static_cast<float>(std::max(0, config.target_switch_delay));
             if (OverlayUI::FloatControlRow(
@@ -295,6 +303,7 @@ void draw_target()
                 config.target_switch_delay = static_cast<int>(switch_delay_ms + 0.5f);
                 changed = true;
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 两次目标切换之间的最小间隔时间。调大: 减少目标闪烁切换; 调小: 更快响应目标变化。默认54ms, 推荐50~100ms");
         }
     }
     OverlayUI::EndCard();
@@ -304,21 +313,27 @@ void draw_target()
         ImGui::SetNextItemWidth((std::min)(120.0f, ImGui::GetContentRegionAvail().x));
         if (ImGui::InputInt("Target Reference Class", &config.target_reference_class, 0, 0))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 目标评分计算时的参考类别ID，用于确定评分基准。默认0, 推荐0");
         ImGui::SetNextItemWidth((std::min)(120.0f, ImGui::GetContentRegionAvail().x));
         if (ImGui::InputInt("Target Lock Fallback Class (-1 = off)", &config.target_lock_fallback_class, 0, 0))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 无主要目标时的回退锁定类别ID，-1表示关闭回退功能。默认-1, 推荐-1");
     }
 
     if (ImGui::CollapsingHeader("SMART TARGET WEIGHTS"))
     {
         if (OverlayUI::FloatControlRow("Distance Weight", &config.distance_scoring_weight, 0.0f, 2.0f, 0.01f, "%.2f", "%.3f"))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 目标距离在智能选择评分中的权重。调大: 更倾向选择近距离目标; 调小: 距离远近影响减弱。默认1.0, 推荐1.0");
         if (OverlayUI::FloatControlRow("Center Weight", &config.center_scoring_weight, 0.0f, 2.0f, 0.01f, "%.2f", "%.3f"))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 目标到屏幕中心距离在智能选择评分中的权重。调大: 更倾向选择屏幕中心的目标; 调小: 偏离中心的影响减弱。默认1.0, 推荐1.0");
         if (OverlayUI::FloatControlRow("Size Weight", &config.size_scoring_weight, 0.0f, 2.0f, 0.01f, "%.2f", "%.3f"))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 目标大小在智能选择评分中的权重。调大: 更倾向选择大目标; 调小: 目标大小影响减弱。默认1.0, 推荐1.0");
         if (OverlayUI::FloatControlRow("Tiebreak Ratio", &config.aim_weight_tiebreak_ratio, 0.0f, 1.0f, 0.01f, "%.2f", "%.3f"))
             changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 目标分数接近时的随机打破平局比例。调大: 更多随机性减少确定性; 调小: 更确定性地选择最高分目标。默认0.10, 推荐0.10");
     }
 
     if (changed)
@@ -335,6 +350,7 @@ void draw_classes()
     static bool cached_names_loaded = false;
 
     bool reload_names = ImGui::Button("Reload Class Names");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 从模型对应的.names文件重新加载类别名称列表。推荐: 切换AI模型后点击刷新");
     if (reload_names || cached_model != config.ai_model)
     {
         cached_model = config.ai_model;
@@ -487,6 +503,7 @@ void draw_classes()
         config.class_priority_order = class_priority_buf;
         changed = true;
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 类别优先级排序，格式如7-0-4，靠前的类别在目标选择中优先生效。默认空, 推荐7-0(头部优先于身体)");
     ImGui::TextDisabled("Format: 7-0-4");
 
     ImGui::SeparatorText("Inference Classes");
@@ -503,6 +520,7 @@ void draw_classes()
         allowed_set = std::move(working);
         changed = true;
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 一键启用所有已检测到的类别进行推理");
     ImGui::SameLine();
     if (ImGui::Button("Clear All"))
     {
@@ -510,16 +528,19 @@ void draw_classes()
         config.allowed_classes.clear();
         changed = true;
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 一键禁用所有类别，清空推理列表");
 
     static int add_class_input_id = 0;
     static char add_class_name[64] = "";
     ImGui::PushItemWidth(120.0f);
     ImGui::InputInt("Class ID##add_class", &add_class_input_id);
     ImGui::PopItemWidth();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 要手动添加的类别ID编号。调大/调小: 改变要添加的类别ID。默认0");
     ImGui::SameLine();
     ImGui::PushItemWidth(180.0f);
     ImGui::InputText("Class Name##add_class", add_class_name, IM_ARRAYSIZE(add_class_name));
     ImGui::PopItemWidth();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 手动添加类别的自定义名称，留空则自动生成class_N格式的名称。默认空");
     ImGui::SameLine();
     if (ImGui::Button("Add Class"))
     {
@@ -543,6 +564,7 @@ void draw_classes()
             changed = true;
         }
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 将指定的类别ID和名称添加到类别列表并自动启用该类别");
 
     if (ImGui::BeginTable(
         "class_filter_table",
@@ -579,6 +601,7 @@ void draw_classes()
             ImGui::PushID(id);
             if (ImGui::Checkbox("##class_enabled", &enabled))
                 apply_toggle(id, enabled);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用/禁用此类别参与推理检测。建议仅开启需要的类别以减少误检");
             ImGui::PopID();
 
             ImGui::TableSetColumnIndex(1);
@@ -605,6 +628,7 @@ void draw_classes()
                 strncpy_s(class_priority_buf, sizeof(class_priority_buf), config.class_priority_order.c_str(), _TRUNCATE);
                 changed = true;
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 将该类别标记为已删除，从列表中移除不再显示");
             ImGui::PopID();
         }
 
@@ -632,6 +656,7 @@ void draw_classes()
             }
             ImGui::EndCombo();
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择要配置独立瞄准位置的类别，不同类别可设置不同的瞄准点");
 
         float pos1 = config.aim_bot_position;
         float pos2 = config.aim_bot_position2;
@@ -648,11 +673,13 @@ void draw_classes()
             pos1 = std::clamp(pos1, 0.0f, 1.0f);
             aim_changed = true;
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选中类别在目标框上的垂直瞄准位置(0.0=顶部, 0.5=居中, 1.0=底部)。调大: 瞄准点下移; 调小: 瞄准点上移。默认0.50, 推荐0.50(居中)");
         if (ImGui::InputFloat("Aim Position2", &pos2, 0.01f, 0.05f, "%.3f"))
         {
             pos2 = std::clamp(pos2, 0.0f, 1.0f);
             aim_changed = true;
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选中类别的第二垂直瞄准位置(备用/交替)。调大: 瞄准点下移; 调小: 瞄准点上移。默认0.50, 推荐0.50(居中)");
         if (aim_changed)
         {
             config.class_aim_positions[selected_class_id] = { pos1, pos2 };
@@ -664,6 +691,7 @@ void draw_classes()
             config.class_aim_positions.erase(selected_class_id);
             changed = true;
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 重置当前选中类别的独立瞄准位置，使其恢复使用全局默认瞄准位置(Aim Position/Aim Position2)");
         ImGui::TextDisabled("If class has no override, global Aim Position values are used.");
 
         if (bodyTexture)

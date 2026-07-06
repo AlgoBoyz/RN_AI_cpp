@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
 #include <winsock2.h>
 #include <Windows.h>
@@ -115,6 +115,7 @@ void draw_debug_frame()
 
     ImGui::SetNextItemWidth((std::min)(220.0f, ImGui::GetContentRegionAvail().x));
     ImGui::SliderFloat("Debug scale", &debug_scale, 0.1f, 2.0f, "%.1fx");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 调整调试预览画面的缩放比例。调大: 放大画面方便查看细节。调小: 缩小画面节省空间。默认1.0, 推荐1.0");
 
     ImVec2 image_size(texW * debug_scale, texH * debug_scale);
     ImGui::Image(g_debugSRV, image_size);
@@ -213,8 +214,10 @@ void draw_debug()
     static bool show_raw_preview = false;
 
     ImGui::Checkbox("Show Debug Window", &config.show_window);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 显示/隐藏调试面板。勾选后显示流水线状态、运行时信息和日志操作等调试信息。默认开启, 推荐开启");
     ImGui::SameLine();
     ImGui::Checkbox("Raw Preview", &show_raw_preview);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 显示原始帧预览画面，叠加AI检测框和预测轨迹点。勾选后在调试窗口内渲染捕获画面。默认关闭, 推荐按需开启");
     if (config.show_window && show_raw_preview)
     {
         draw_debug_frame();
@@ -273,6 +276,7 @@ void draw_debug()
 
     ImGui::Separator();
     ImGui::Checkbox("Verbose console output", &config.verbose);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用详细控制台日志，将所有std::cout/std::cerr输出写入runtime_console.log文件。开启后方便排查问题但增加IO开销。默认关闭, 推荐调试时开启");
     ImGui::TextDisabled("Writes all std::cout/std::cerr to runtime_console.log");
 
     if (prev_verbose != config.verbose)
@@ -286,9 +290,11 @@ void draw_debug()
     {
         if (ImGui::Button("Open Log Folder"))
             std::cout << "[INFO] Open log folder clicked" << std::endl;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 打开日志文件夹，方便查看runtime_console.log等日志文件");
         ImGui::SameLine();
         if (ImGui::Button("Export Logs"))
             std::cout << "[INFO] Export logs clicked" << std::endl;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 导出日志文件到指定位置，方便分享或存档排查");
     }
     OverlayUI::EndCard();
 }

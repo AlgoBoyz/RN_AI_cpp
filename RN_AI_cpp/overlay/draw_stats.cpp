@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
 #include <winsock2.h>
 #include <Windows.h>
@@ -236,6 +236,7 @@ void draw_stats()
 
     if (ImGui::CollapsingHeader("DETECTION STATISTICS", ImGuiTreeNodeFlags_DefaultOpen))
     {
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 展开/折叠检测统计详情。显示当前检测到的目标数量、平均置信度阈值和目标锁定状态。");
         size_t detCount = 0;
         {
             std::lock_guard<std::mutex> lock(detectionBuffer.mutex);

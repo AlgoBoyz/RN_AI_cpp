@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
 #include <winsock2.h>
 #include <Windows.h>
@@ -116,6 +116,7 @@ static void draw_detected_classes()
     {
         seen_classes.clear();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 清除本次会话中已记录的所有检测类别。");
 
     if (current_counts.empty())
     {
@@ -171,16 +172,27 @@ static void draw_class_mapping()
 
     bool class_changed = false;
     class_changed |= edit_class("Player Class Id", config.class_player);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置玩家类的模型输出 ID，用于识别玩家目标。");
     class_changed |= edit_class("Bot Class Id", config.class_bot);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置 Bot 类的模型输出 ID，用于识别 Bot 目标。");
     class_changed |= edit_class("Head Class Id", config.class_head);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置头部类的模型输出 ID，用于爆头瞄准。");
     class_changed |= edit_class("Third Person Class Id", config.class_third_person);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置第三人称视角类的模型输出 ID。");
     class_changed |= edit_class("Hideout Human Class Id", config.class_hideout_target_human);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置藏身处人形目标类的模型输出 ID。");
     class_changed |= edit_class("Hideout Balls Class Id", config.class_hideout_target_balls);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置藏身处球类目标类的模型输出 ID。");
     class_changed |= edit_class("Weapon Class Id", config.class_weapon);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置武器类的模型输出 ID。");
     class_changed |= edit_class("Outline Class Id", config.class_outline);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置轮廓类的模型输出 ID。");
     class_changed |= edit_class("Dead Body Class Id", config.class_dead_body);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置尸体类的模型输出 ID。");
     class_changed |= edit_class("Smoke Class Id", config.class_smoke);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置烟雾类的模型输出 ID。");
     class_changed |= edit_class("Fire Class Id", config.class_fire);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 设置火焰类的模型输出 ID。");
 
     if (class_changed)
     {
@@ -198,6 +210,7 @@ static void draw_model_classes()
     bool reload = false;
     if (ImGui::Button("Reload Class Names"))
         reload = true;
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 从模型对应的标签文件（.names/.txt）重新加载类别名称列表。");
 
     if (cached_model != config.ai_model || reload)
     {

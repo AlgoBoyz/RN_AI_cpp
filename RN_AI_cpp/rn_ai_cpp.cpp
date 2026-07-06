@@ -1114,7 +1114,9 @@ void GameOverlayThreadFunction()
 
         if (drawFrame)
         {
-            gameOverlayPtr->AddRect({ offX, offY, capW, capH }, ARGB((uint8_t)fa, (uint8_t)fr, (uint8_t)fg, (uint8_t)fb), frameThickness);
+            uint8_t r = (uint8_t)fr, g = (uint8_t)fg, b = (uint8_t)fb;
+            if (aiming.load(std::memory_order_relaxed)) { r = 255; g = 0; b = 0; }
+            gameOverlayPtr->AddRect({ offX, offY, capW, capH }, ARGB((uint8_t)fa, r, g, b), frameThickness);
         }
 
         std::vector<cv::Rect> boxesCopy;

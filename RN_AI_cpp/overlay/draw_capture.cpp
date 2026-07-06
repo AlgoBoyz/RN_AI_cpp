@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
 #include <winsock2.h>
 #include <Windows.h>
@@ -88,6 +88,7 @@ void draw_capture_settings()
                 OverlayConfig_MarkDirty();
             }
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: AI检测输入帧边长(像素)。调大=更精细但更吃性能, 调小=更快但可能漏检。默认320, 推荐640");
         if (OverlayUI::g_show_descriptions)
             ImGui::TextDisabled("Input size for AI model - higher = more accurate but slower");
 
@@ -99,6 +100,7 @@ void draw_capture_settings()
             capture_method_changed.store(true);
             OverlayConfig_MarkDirty();
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 画面捕获方式。duplication_api=DXGI桌面复制(最低延迟), winrt=Windows通用捕获, virtual_camera=虚拟摄像头, udp=网络流, obs=OBS插件。默认udp");
         if (OverlayUI::g_show_descriptions)
             ImGui::TextDisabled("duplication_api / winrt / virtual_camera / udp / obs");
 
@@ -114,6 +116,7 @@ void draw_capture_settings()
             capture_fps_changed.store(true);
             OverlayConfig_MarkDirty();
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 捕获帧率上限。调大=画面更流畅但更吃CPU, 调小=省性能。0=关闭捕获线程。默认0, 推荐60-120");
         if (OverlayUI::g_show_descriptions)
             ImGui::TextDisabled("Current: %d FPS", config.capture_fps);
 
@@ -127,6 +130,7 @@ void draw_capture_settings()
             capture_method_changed.store(true);
             OverlayConfig_MarkDirty();
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 仅检测圆形FOV区域内的目标。开启=减少边缘误检, 关闭=检测全图。默认true");
         if (OverlayUI::g_show_descriptions)
             ImGui::TextDisabled("Only detect targets in circular FOV (reduces false positives)");
 
@@ -142,6 +146,7 @@ void draw_capture_settings()
                 capture_method_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: GPU零拷贝捕获, 省去CPU-GPU拷贝延迟。仅NVIDIA显卡+duplication_api可用。默认true");
             if (OverlayUI::g_show_descriptions)
                 ImGui::TextDisabled("Zero-copy GPU capture for lowest latency (requires NVIDIA GPU)");
 
@@ -180,6 +185,7 @@ void draw_capture_settings()
                 capture_method_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择要捕获的显示器编号。默认Monitor 1");
         }
     }
     OverlayUI::EndCard();
@@ -190,10 +196,12 @@ void draw_capture_settings()
         {
             OverlayUI::AdaptiveItemWidth();
             ImGui::Combo("Source mode", &winrt_source_mode, "Monitor\0Window title (preview)\0");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: WinRT捕获源类型。Monitor=捕获整个显示器, Window title=按窗口标题捕获。默认Monitor");
             if (winrt_source_mode == 1)
             {
                 OverlayUI::AdaptiveItemWidth();
                 ImGui::InputText("Window title", winrt_window_title_buf, IM_ARRAYSIZE(winrt_window_title_buf));
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: WinRT窗口捕获的目标窗口标题。需先切Source mode为Window title");
                 ImGui::TextDisabled("Current backend uses monitor capture only.");
             }
 
@@ -208,12 +216,14 @@ void draw_capture_settings()
                 capture_borders_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: WinRT捕获时是否包含窗口边框。默认true");
 
             if (ImGui::Checkbox("Capture Cursor", &config.capture_cursor))
             {
                 capture_cursor_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 捕获画面中是否绘制鼠标光标。默认true");
 
             if (disable_winrt_futures)
             {
@@ -234,6 +244,7 @@ void draw_capture_settings()
             ImGui::Text("Filter:");
             OverlayUI::AdaptiveItemWidth();
             ImGui::InputText("##VCFilter", virtual_camera_filter_buf, IM_ARRAYSIZE(virtual_camera_filter_buf));
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 按名称关键字过滤虚拟摄像头列表");
 
             std::string filter_lower = virtual_camera_filter_buf;
             std::transform(filter_lower.begin(), filter_lower.end(), filter_lower.begin(), ::tolower);
@@ -275,6 +286,7 @@ void draw_capture_settings()
                     capture_method_changed.store(true);
                     OverlayConfig_MarkDirty();
                 }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择要捕获的虚拟摄像头设备");
             }
             else
             {
@@ -294,12 +306,14 @@ void draw_capture_settings()
                 capture_method_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 虚拟摄像头捕获宽度(像素)。默认1920, 推荐1920");
 
             if (OverlayUI::IntControlRow("Virtual camera heigth", &config.virtual_camera_heigth, 128, 2160, 8, "px"))
             {
                 capture_method_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 虚拟摄像头捕获高度(像素)。默认1080, 推荐1080");
         }
         OverlayUI::EndCard();
     }
@@ -313,15 +327,18 @@ void draw_capture_settings()
                 capture_method_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: UDP接收端口, 需与发送端端口一致。范围1024-65535。默认12345");
             if (OverlayUI::IntControlRow("JPEG quality", &config.udp_jpeg_quality, 1, 100, 1, ""))
             {
                 capture_method_changed.store(true);
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: UDP接收的JPEG解码质量百分比。调大=画质好但带宽高, 调小=省带宽但画质差。默认80");
             if (ImGui::Checkbox("Save received frames", &config.udp_save_frames))
             {
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 将接收到的UDP帧保存到 %%USERPROFILE%%\\rn_ai\\ 目录用于调试。默认false");
             if (config.udp_save_frames)
             {
                 ImGui::TextDisabled("Saving to %%USERPROFILE%%\\rn_ai\\");
@@ -338,6 +355,7 @@ void draw_capture_settings()
             {
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用OBS WebSocket连接获取游戏画面。需先在OBS中安装WebSocket插件。默认false");
             if (!obs_buf_inited)
             {
                 strncpy_s(obs_ip_buf, sizeof(obs_ip_buf), config.obs_ip.c_str(), _TRUNCATE);
@@ -349,6 +367,7 @@ void draw_capture_settings()
                 config.obs_ip = obs_ip_buf;
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: OBS WebSocket服务器IP地址, 通常为本机127.0.0.1");
             OverlayUI::AdaptiveItemWidth();
             if (ImGui::InputInt("OBS Port", &config.obs_port))
             {
@@ -356,6 +375,7 @@ void draw_capture_settings()
                     config.obs_port = 0;
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: OBS WebSocket服务器端口, 需与OBS中设置一致。默认4455");
             OverlayUI::AdaptiveItemWidth();
             if (ImGui::InputInt("OBS FPS", &config.obs_fps))
             {
@@ -363,6 +383,7 @@ void draw_capture_settings()
                     config.obs_fps = 0;
                 OverlayConfig_MarkDirty();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: OBS捕获帧率上限。默认240");
         }
         OverlayUI::EndCard();
     }

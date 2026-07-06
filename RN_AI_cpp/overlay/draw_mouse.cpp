@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
 #include <winsock2.h>
 #include <Windows.h>
@@ -176,7 +176,7 @@ static void draw_smoothing_kalman_demo_canvas()
     static double smX = center.x, smY = center.y;
     int   N = config.smoothness > 0 ? config.smoothness : 1;
     double alpha = 1.0 / N;
-    // ?????, ???? Kalman-?????????? �???????� ??????? ??????
+    // ?????, ???? Kalman-?????????? ???? ? ??????? ??????
     const double resetThreshold = 5.0;
     if (hypot(kalX - smX, kalY - smY) > resetThreshold) {
         smX = kalX;
@@ -324,11 +324,14 @@ void draw_mouse()
 {
     ImGui::SeparatorText("FOV");
     ImGui::SliderInt("FOV X", &config.fovX, 10, 120);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 水平方向瞄准视野范围(像素)。调大: 锁定更远目标但增加误锁。调小: 仅锁定近处目标。默认106, 推荐100-120");
     ImGui::SliderInt("FOV Y", &config.fovY, 10, 120);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 垂直方向瞄准视野范围(像素)。调大: 锁定更高/更低目标。调小: 仅锁定水平线附近目标。默认74, 推荐70-80");
 
     ImGui::SeparatorText("Mouse Passthrough");
     if (ImGui::SliderFloat("Human Mouse Sensitivity", &config.human_mouse_sensitivity, 0.0f, 1.5f, "%.2f"))
         config.saveConfig();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 人类鼠标移动灵敏度倍率, 在转发到硬件前对dx/dy乘以此值。调大: 鼠标移动更快。调小: 鼠标移动更慢。默认1.0, 推荐0.8-1.2");
 
     ImGui::SeparatorText("Aim Trigger");
     const char* aim_modes[] = { "Hold (aim while pressed)", "Timed toggle (tap = N ms)", "Shoot (hold left button)", "Key hold (hold F12 to aim)" };
@@ -337,9 +340,11 @@ void draw_mouse()
         config.aim_trigger_mode = aim_m;
         config.saveConfig();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 瞄准触发方式。0=按住瞄准键时瞄准, 1=点击切换定时瞄准, 2=按住左键射击时瞄准, 3=按住F12瞄准。默认0, 推荐0(Hold)");
     if (config.aim_trigger_mode == 1) {
         if (ImGui::SliderInt("Timed Duration (ms)", &config.aim_timed_duration_ms, 100, 5000))
             config.saveConfig();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 定时瞄准模式的持续时间(毫秒)。调大: 单次点击瞄准更久。调小: 单次点击瞄准更短。默认2000, 推荐1000-3000");
         ImGui::SameLine();
         ImGui::TextDisabled("(tap=aim, tap again=cancel, hold=until release)");
     }
@@ -355,32 +360,51 @@ void draw_mouse()
             input_method_changed.store(true);
             globalMouseThread->configurePidFromConfig();
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 瞄准控制器算法选择。Sunone=卡尔曼+平滑传统方案, PID=比例积分微分控制器(旁路卡尔曼/平滑/预测)。默认0(Sunone), 推荐0");
     }
     if (config.aim_controller == 1)
     {
         bool pc = false;
         pc |= ImGui::SliderFloat("Kp X", &config.pid_kp_x, 0.0f, 2.0f, "%.3f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID X轴比例系数, 响应当前位置误差。调大: 跟踪更快但可能过冲振荡。调小: 更平滑但响应慢。默认0.4, 推荐0.3-0.6");
         pc |= ImGui::SliderFloat("Kp Y", &config.pid_kp_y, 0.0f, 2.0f, "%.3f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID Y轴比例系数, 响应当前位置误差。调大: 跟踪更快但可能过冲振荡。调小: 更平滑但响应慢。默认0.4, 推荐0.3-0.6");
         pc |= ImGui::SliderFloat("Ki X", &config.pid_ki_x, 0.0f, 0.1f, "%.4f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID X轴积分系数, 消除稳态误差。调大: 更彻底消除残差但可能积分饱和。调小: 减少过冲。默认0.02, 推荐0.001-0.05");
         pc |= ImGui::SliderFloat("Ki Y", &config.pid_ki_y, 0.0f, 0.1f, "%.4f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID Y轴积分系数, 消除稳态误差。调大: 更彻底消除残差但可能积分饱和。调小: 减少过冲。默认0.02, 推荐0.001-0.05");
         pc |= ImGui::SliderFloat("Kd X", &config.pid_kd_x, 0.0f, 1.0f, "%.3f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID X轴微分系数, 阻尼速度变化预测趋势。调大: 减少过冲但可能放大噪声。调小: 更平滑但可能振荡。默认0.01, 推荐0.005-0.05");
         pc |= ImGui::SliderFloat("Kd Y", &config.pid_kd_y, 0.0f, 1.0f, "%.3f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID Y轴微分系数, 阻尼速度变化预测趋势。调大: 减少过冲但可能放大噪声。调小: 更平滑但可能振荡。默认0.01, 推荐0.005-0.05");
         pc |= ImGui::SliderFloat("Windup X", &config.pid_windup_x, 0.0f, 500.0f, "%.1f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID X轴积分限幅上限, 防止积分项无限累积(windup)。调大: 允许更大积分累积。调小: 更严格限制积分。默认100, 推荐50-200");
         pc |= ImGui::SliderFloat("Windup Y", &config.pid_windup_y, 0.0f, 500.0f, "%.1f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID Y轴积分限幅上限, 防止积分项无限累积(windup)。调大: 允许更大积分累积。调小: 更严格限制积分。默认100, 推荐50-200");
         pc |= ImGui::SliderFloat("Deadzone", &config.pid_deadzone, 0.0f, 30.0f, "%.1f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID 末端死区半径(像素), 误差进入此范围停止输出避免抖动。调大: 更早停但可能不到位。调小/0: 更精准但可能微抖。默认5.0, 推荐3.0-10.0");
         const char* aw[] = { "Freeze", "BackCalc" };
         int awm = config.pid_anti_windup_mode;
         if (ImGui::Combo("Anti-windup", &awm, aw, IM_ARRAYSIZE(aw))) { config.pid_anti_windup_mode = awm; pc = true; }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 抗积分饱和策略。Freeze=饱和时冻结积分, BackCalc=反向计算修正积分。默认0(Freeze), 推荐0");
         if (config.pid_anti_windup_mode == 1)
         {
             pc |= ImGui::SliderFloat("BackCalc gain X", &config.pid_backcalc_gain_x, 0.0f, 1.0f, "%.3f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: BackCalc抗饱和X轴增益, 控制积分回退速度。调大: 更快退出饱和。调小: 更慢退出饱和。默认0.1, 推荐0.05-0.3");
             pc |= ImGui::SliderFloat("BackCalc gain Y", &config.pid_backcalc_gain_y, 0.0f, 1.0f, "%.3f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: BackCalc抗饱和Y轴增益, 控制积分回退速度。调大: 更快退出饱和。调小: 更慢退出饱和。默认0.1, 推荐0.05-0.3");
         }
         pc |= ImGui::Checkbox("Output limit", &config.pid_output_limit_enabled);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用PID输出限幅, 将输出钳制在±Out max范围内防止跳帧。默认开启, 推荐开启");
         if (config.pid_output_limit_enabled)
+        {
             pc |= ImGui::SliderFloat("Out max", &config.pid_out_max, 1.0f, 500.0f, "%.1f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID输出最大值限制(像素/帧)。调大: 允许更大单帧移动。调小: 限制单帧移动量更平滑。默认40.0, 推荐20-80");
+        }
         pc |= ImGui::SliderFloat("Smooth X", &config.pid_smooth_x, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID X轴输出平滑混合系数。0=纯delta误差(更直接), 1=纯P+I+D(更平滑)。默认0.5, 推荐0.3-0.7");
         pc |= ImGui::SliderFloat("Smooth Y", &config.pid_smooth_y, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: PID Y轴输出平滑混合系数。0=纯delta误差(更直接), 1=纯P+I+D(更平滑)。默认0.5, 推荐0.3-0.7");
         if (pc)
         {
             config.saveConfig();
@@ -390,14 +414,17 @@ void draw_mouse()
     }
 
     ImGui::SliderInt("Smoothness", &config.smoothness, 1, 200, "%d");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 鼠标移动平滑度, 值越大移动越平滑但响应越慢(EMA窗口大小)。调大: 更平滑但延迟更高。调小: 响应更快但可能抖动。默认100, 推荐60-150");
     if (ImGui::Checkbox("Enable Smooth Movement", &config.use_smoothing))
     {
         config.saveConfig();
         input_method_changed.store(true);
         globalMouseThread->setUseSmoothing(config.use_smoothing);
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用EMA平滑移动, 配合Smoothness值使用。默认开启, 推荐开启");
     ImGui::SameLine();
     ImGui::Checkbox("Tracking Smoothing", &config.tracking_smoothing);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 对跟踪目标应用额外平滑, 减少目标切换时的跳变。默认关闭, 推荐关闭(如感觉跳变可开启)");
     ImGui::SameLine();
     if (ImGui::Checkbox("Enable Kalman Filter", &config.use_kalman))
     {
@@ -405,16 +432,22 @@ void draw_mouse()
         input_method_changed.store(true);
         globalMouseThread->setUseKalman(config.use_kalman);
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用卡尔曼滤波器预测目标位置, 减少检测噪声。默认关闭, 推荐开启");
 
 
     if (config.use_kalman)
     {
         bool changed = false;
         changed |= ImGui::SliderFloat("Kalman Process Noise", &config.kalman_process_noise, 0.10f, 1.0f, "%.4f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 卡尔曼过程噪声Q, 表示模型不确定性。调大: 更信任测量值响应更快。调小: 更信任预测值更平滑。默认0.01(实际滑条下限0.10), 推荐0.10-0.50");
         changed |= ImGui::SliderFloat("Kalman Measurement Noise", &config.kalman_measurement_noise, 0.40f, 1.0f, "%.4f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 卡尔曼测量噪声R, 表示传感器精度。调大: 更信任预测值更平滑。调小: 更信任测量值响应更快。默认0.10(实际滑条下限0.40), 推荐0.40-0.80");
         changed |= ImGui::SliderFloat("Kalman Speed Multiplier X", &config.kalman_speed_multiplier_x, 0.1f, 5.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 卡尔曼X轴速度倍率, 缩放卡尔曼输出的X方向移动量。调大: X轴移动更快更激进。调小: X轴移动更慢更保守。默认1.0, 推荐0.8-1.5");
         changed |= ImGui::SliderFloat("Kalman Speed Multiplier Y", &config.kalman_speed_multiplier_y, 0.1f, 5.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 卡尔曼Y轴速度倍率, 缩放卡尔曼输出的Y方向移动量。调大: Y轴移动更快更激进。调小: Y轴移动更慢更保守。默认1.0, 推荐0.8-1.5");
         changed |= ImGui::SliderFloat("Reset Threshold", &config.resetThreshold, 1.0f, 20.0f, "%.1f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 卡尔曼重置阈值, 当预测位置与当前平滑位置差距超过此值(像素)时重置滤波器。调大: 减少重置更平滑但可能跟丢。调小: 更快重置但可能频繁跳变。默认5.0, 推荐3.0-10.0");
 
         if (changed)
         {
@@ -451,12 +484,15 @@ void draw_mouse()
 
     ImGui::SeparatorText("Speed Multiplier");
     ImGui::SliderFloat("Min Speed Multiplier", &config.minSpeedMultiplier, 0.1f, 5.0f, "%.1f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 最小速度倍率, 控制瞄准起始/近处移动速度的下限。调大: 近处移动更快。调小: 近处移动更慢更精细。默认0.1, 推荐0.1-0.5");
     ImGui::SliderFloat("Max Speed Multiplier", &config.maxSpeedMultiplier, 0.1f, 5.0f, "%.1f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 最大速度倍率, 控制瞄准远端移动速度的上限。调大: 远处移动更快更激进。调小: 远处移动更慢更保守。默认0.1, 推荐0.1-0.5");
 
     if (config.use_kalman)
     {
         ImGui::SeparatorText("Prediction");
         ImGui::SliderFloat("Prediction Interval", &config.predictionInterval, 0.00f, 0.5f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 预测间隔(秒), 0=禁用预测。调大: 预测更远未来位置。调小: 预测更近未来位置。默认0.01, 推荐0.01-0.05");
         const char* mode_items[] = { "Standard", "Kalman Lead", "Kalman + Raw" };
         int mode_idx = config.prediction_mode;
         if (ImGui::Combo("Prediction Mode", &mode_idx, mode_items, IM_ARRAYSIZE(mode_items)))
@@ -464,13 +500,21 @@ void draw_mouse()
             config.prediction_mode = mode_idx;
             config.saveConfig();
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 预测算法模式。Standard=基于速度外推, Kalman Lead=卡尔曼超前预测, Kalman+Raw=卡尔曼与原始混合。默认0(Standard), 推荐0");
         ImGui::SliderFloat("Pred Kalman Lead (ms)", &config.prediction_kalman_lead_ms, 0.0f, 150.0f, "%.1f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: Kalman预测模式下的超前时间(毫秒)。调大: 预测更远未来位置更激进。调小: 预测更保守。默认0, 推荐20-60");
         ImGui::SliderFloat("Pred Kalman Max Lead (ms)", &config.prediction_kalman_max_lead_ms, 0.0f, 250.0f, "%.1f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: Kalman预测最大超前时间上限(毫秒)。调大: 允许更大预测范围。调小: 限制预测范围防止过冲。默认0, 推荐50-150");
         ImGui::SliderFloat("Pred Velocity Smoothing", &config.prediction_velocity_smoothing, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 预测速度平滑系数(EMA)。调大: 速度估计更平滑但响应慢。调小: 速度估计更灵敏但噪声大。默认0.4, 推荐0.3-0.6");
         ImGui::SliderFloat("Pred Velocity Scale", &config.prediction_velocity_scale, 0.0f, 3.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 预测速度缩放倍率。调大: 预测位置更超前更激进。调小: 预测位置更保守。默认1.0, 推荐0.8-1.5");
         ImGui::SliderFloat("Pred Kalman Q", &config.prediction_kalman_process_noise, 0.001f, 5.0f, "%.3f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 预测用卡尔曼过程噪声Q。调大: 更信任测量值响应更快。调小: 更信任模型预测更平滑。默认0.01, 推荐0.005-0.05");
         ImGui::SliderFloat("Pred Kalman R", &config.prediction_kalman_measurement_noise, 0.001f, 5.0f, "%.3f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 预测用卡尔曼测量噪声R。调大: 更信任模型预测更平滑。调小: 更信任测量值响应更快。默认0.10, 推荐0.05-0.50");
         ImGui::Checkbox("Use Future For Aim", &config.prediction_use_future_for_aim);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 将预测的未来位置直接用于瞄准而非当前位置。开启后瞄准更超前。默认关闭, 推荐根据游戏需求开启");
         if (config.predictionInterval == 0.00f)
         {
             ImGui::SameLine();
@@ -483,28 +527,37 @@ void draw_mouse()
                 config.saveConfig();
                 input_method_changed.store(true);
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 绘制未来预测位置的数量。调大: 显示更多预测点。调小: 显示更少预测点。默认20, 推荐10-30");
 
             ImGui::SameLine();
             if (ImGui::Checkbox("Draw##draw_future_positions_button", &config.draw_futurePositions))
             {
                 config.saveConfig();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 在游戏覆盖层上绘制未来预测位置点。默认开启, 推荐开启(方便调试)");
         }
     }
 
     ImGui::SeparatorText("Camera Compensation");
     ImGui::Checkbox("Enable Camera Compensation", &config.camera_compensation_enabled);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用相机移动补偿, 抵消游戏中镜头自身运动对瞄准的影响。默认关闭, 推荐需要时开启");
     if (config.camera_compensation_enabled)
     {
         ImGui::SliderFloat("Camera Max Shift", &config.camera_compensation_max_shift, 0.0f, 200.0f, "%.1f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 相机补偿最大偏移量(像素), 限制补偿范围防止异常跳变。调大: 允许更大补偿范围。调小: 限制补偿更安全。默认50, 推荐30-100");
         ImGui::SliderFloat("Camera Strength", &config.camera_compensation_strength, 0.0f, 3.0f, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 相机补偿强度系数。调大: 补偿更激进。调小: 补偿更保守。默认1.0, 推荐0.5-1.5");
     }
 
     ImGui::SeparatorText("Target corrention");
     ImGui::SliderFloat("Snap Radius", &config.snapRadius, 0.1f, 5.0f, "%.1f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 吸附半径, 目标进入此范围后速度降至最低并应用吸附增强。调大: 更大范围减速。调小: 更小范围减速更精准。默认1.5, 推荐1.0-3.0");
     ImGui::SliderFloat("Near Radius", &config.nearRadius, 1.0f, 40.0f, "%.1f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 近距半径, 目标距准星此范围内开始减速(SpeedCurve控制曲线)。调大: 更早开始减速。调小: 更晚减速更快速接近。默认25, 推荐15-35");
     ImGui::SliderFloat("Speed Curve Exponent", &config.speedCurveExponent, 0.1f, 10.0f, "%.1f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 速度曲线指数, 控制近距半径内减速曲线的陡峭程度。调大: 近处减速更急剧(更平滑停靠)。调小: 减速更线性。默认3.0, 推荐2.0-5.0");
     ImGui::SliderFloat("Snap Boost Factor", &config.snapBoostFactor, 0.01f, 4.00f, "%.2f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 吸附增强因子, 进入吸附半径后速度倍率乘以该值。调大: 吸附更强(更快锁上)。调小: 吸附更弱更自然。默认1.15, 推荐1.0-1.5");
 
     ImGui::SeparatorText("Game Profile");
     std::vector<std::string> profile_names;
@@ -542,6 +595,7 @@ void draw_mouse()
         );
         input_method_changed.store(true);
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择当前激活的游戏配置文件, 切换sens/yaw/pitch等灵敏度参数。默认UNIFIED, 推荐按游戏创建独立配置");
 
     const auto& gp = config.currentProfile();
 
@@ -562,13 +616,18 @@ void draw_mouse()
         float baseFOV_f = static_cast<float>(modifiable.baseFOV);
 
         changed |= ImGui::SliderFloat("Sensitivity", &sens_f, 0.001f, 10.0f, "%.4f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 游戏内鼠标灵敏度设置, 用于将角度转换为鼠标计数。调大: 输出移动量减小(游戏更灵敏)。调小: 输出移动量增大。默认1.0, 需与游戏内设置匹配");
         changed |= ImGui::SliderFloat("Yaw", &yaw_f, 0.001f, 0.1f, "%.4f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 游戏水平偏航角每计数角度(度), 用于角度到鼠标计数的转换。调大: 水平移动更大。调小: 水平移动更小。默认0.022, 需与游戏引擎匹配");
         changed |= ImGui::SliderFloat("Pitch", &pitch_f, 0.001f, 0.1f, "%.4f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 游戏垂直俯仰角每计数角度(度), 用于角度到鼠标计数的转换。调大: 垂直移动更大。调小: 垂直移动更小。默认0.022, 需与游戏引擎匹配");
 
         changed |= ImGui::Checkbox("FOV Scaled", &modifiable.fovScaled);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 根据当前FOV与Base FOV的比例缩放灵敏度, 使不同瞄准镜下手感一致。默认关闭, 推荐开启");
         if (modifiable.fovScaled)
         {
             changed |= ImGui::SliderFloat("Base FOV", &baseFOV_f, 10.0f, 180.0f, "%.1f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 基准FOV值, 灵敏度缩放的参考FOV(通常为腰射FOV)。调大: 缩放更激进。调小: 缩放更保守。默认90, 推荐与游戏腰射FOV一致");
         }
 
         if (changed)
@@ -640,16 +699,20 @@ void draw_mouse()
         ImGui::SeparatorText("Performance");
         if (ImGui::Checkbox("Idle Throttle (~10 fps when not aiming)", &config.inference_idle_throttle))
             config.saveConfig();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 空闲时节流, 不瞄准时降低捕获+推理帧率至约10fps以节省GPU资源。默认开启, 推荐开启");
 
         ImGui::SeparatorText("Auto Shoot");
         ImGui::Checkbox("Auto Shoot", &config.auto_shoot);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 自动射击, 准星对准目标时自动按下射击键。默认关闭, 推荐需要时开启");
         if (config.auto_shoot)
         {
             ImGui::SliderFloat("bScope Multiplier", &config.bScope_multiplier, 0.2f, 2.0f, "%.1f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 开镜时自动射击距离倍率, 开镜后触发射击的距离乘以此值。调大: 开镜后更远触发射击。调小: 开镜后更近触发射击。默认1.0, 推荐1.0-1.5");
         }
 
         ImGui::SeparatorText("Triggerbot");
         ImGui::Checkbox("Triggerbot (only fire, no aim)", &config.triggerbot);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 扳机机器人, 仅自动射击不控制瞄准, 准星扫过目标时自动开火。默认关闭, 推荐需要时开启");
         if (config.triggerbot)
         {
             int reaction_ms = config.triggerbot_reaction_ms;
@@ -658,7 +721,9 @@ void draw_mouse()
                 config.triggerbot_reaction_ms = reaction_ms;
                 config.saveConfig();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 扳机反应延迟(毫秒), 从检测到目标到触发射击的延迟。调大: 更拟人但可能错过机会。调小/0: 即时反应。默认0, 推荐0-150");
             ImGui::SliderFloat("Triggerbot bScope", &config.triggerbot_bScope_multiplier, 0.5f, 2.0f, "%.1f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 扳机开镜倍率, 开镜时触发距离乘以此值。调大: 开镜后更远触发。调小: 开镜后更近触发。默认1.0, 推荐1.0-1.5");
         }
 
         ImGui::SeparatorText("Wind mouse");
@@ -667,27 +732,32 @@ void draw_mouse()
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用WindMouse拟人鼠标移动算法, 模拟人类手部自然运动轨迹(带重力/风力效果)。默认开启, 推荐开启");
         if (config.wind_mouse_enabled)
         {
             if (ImGui::SliderFloat("Gravity force", &config.wind_G, 4.00f, 40.00f, "%.2f"))
             {
                 config.saveConfig();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: WindMouse重力强度, 控制鼠标向目标移动的加速度。调大: 移动更快更直接。调小: 移动更慢更飘忽。默认18, 推荐12-25");
 
             if (ImGui::SliderFloat("Wind fluctuation", &config.wind_W, 1.00f, 40.00f, "%.2f"))
             {
                 config.saveConfig();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: WindMouse风力波动幅度, 控制移动路径的随机摆动程度。调大: 路径更弯曲更拟人。调小: 路径更直线。默认15, 推荐10-20");
 
             if (ImGui::SliderFloat("Max step (velocity clip)", &config.wind_M, 1.00f, 40.00f, "%.2f"))
             {
                 config.saveConfig();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: WindMouse最大步长(速度上限), 限制单步最大移动距离。调大: 更快但可能跳过目标。调小: 更慢更精细。默认10, 推荐5-15");
 
             if (ImGui::SliderFloat("Distance where behaviour changes", &config.wind_D, 1.00f, 40.00f, "%.2f"))
             {
                 config.saveConfig();
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: WindMouse行为切换距离, 距目标小于此值时切换为精细接近模式。调大: 更早进入精细模式。调小: 更晚切换快速接近。默认8, 推荐5-12");
 
             if (ImGui::Button("Reset Wind Mouse to default settings"))
             {
@@ -732,8 +802,9 @@ void draw_mouse()
             input_method_changed.store(true);
         }
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择鼠标输入硬件方式。WIN32=系统API(可能被检测), ARDUINO=Arduino串口, KMBOX_B=串口KMBOX, KMBOX_NET=网络KMBOX, MAKCU=MAKCU串口。默认WIN32, 推荐ARDUINO或KMBOX");
 
-    
+
     if (config.input_method == "MAKCU")
     {
         if (makcu && makcu->isOpen())
@@ -785,6 +856,7 @@ void draw_mouse()
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择MAKCU设备连接的串口号。默认COM1");
 
         std::vector<int> baud_list = { 115200, 1000000, 2000000, 4000000 };
         std::vector<std::string> baud_str_list;
@@ -809,6 +881,7 @@ void draw_mouse()
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择MAKCU串口通信波特率。默认115200, 推荐115200");
     }
     else if (config.input_method == "ARDUINO")
     {
@@ -853,6 +926,7 @@ void draw_mouse()
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择Arduino设备连接的串口号。默认COM1");
 
         std::vector<int> baud_rate_list = { 9600, 19200, 38400, 57600, 115200 };
         std::vector<std::string> baud_rate_str_list;
@@ -884,17 +958,20 @@ void draw_mouse()
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择Arduino串口通信波特率。默认115200, 推荐115200");
 
         if (ImGui::Checkbox("Arduino 16-bit Mouse", &config.arduino_16_bit_mouse))
         {
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用Arduino 16位鼠标报告, 支持更大的移动范围(-32768~32767)。默认关闭, 推荐需要大范围移动时开启");
         if (ImGui::Checkbox("Arduino Enable Keys", &config.arduino_enable_keys))
         {
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 启用Arduino键盘按键支持, 允许Arduino发送键盘事件(如射击/换弹)。默认关闭, 推荐需要时开启");
     }
     else if (config.input_method == "WIN32")
     {
@@ -928,6 +1005,7 @@ void draw_mouse()
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择KMBOX B串口设备连接的串口号。默认COM0");
 
         std::vector<int> baud_list = { 9600, 19200, 38400, 57600, 115200 };
         std::vector<std::string> baud_str_list;
@@ -952,6 +1030,7 @@ void draw_mouse()
             config.saveConfig();
             input_method_changed.store(true);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: 选择KMBOX B串口通信波特率。默认115200, 推荐115200");
 
        /* if (ImGui::Button("Run boot.py"))
         {
@@ -976,8 +1055,11 @@ void draw_mouse()
         strncpy(uuid, config.kmbox_net_uuid.c_str(), sizeof(uuid));
 
         ImGui::InputText("kmboxNet IP", ip, sizeof(ip));
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: KMBOX Net设备的IP地址。默认127.0.0.1, 需与设备实际IP一致");
         ImGui::InputText("Port", port, sizeof(port));
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: KMBOX Net设备的通信端口号。默认12345, 需与设备实际端口一致");
         ImGui::InputText("UUID", uuid, sizeof(uuid));
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(u8"功能: KMBOX Net设备的UUID标识符, 用于配对认证。需与设备UUID一致");
 
         if (ImGui::Button("Save & Reconnect"))
         {
@@ -996,7 +1078,7 @@ void draw_mouse()
         {
             ImGui::TextColored(ImVec4(255, 0, 0, 255), "kmboxNet not connected");
         }
-        
+
         if (ImGui::Button("Reboot box"))
         {
             if (kmboxNetSerial)
@@ -1147,4 +1229,3 @@ void draw_mouse()
         config.saveConfig();
     }
 }
-
